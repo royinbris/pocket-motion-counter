@@ -24,6 +24,15 @@ export default function App() {
   const [debugFilteredMag, setDebugFilteredMag] = useState(9.8);
   const [workoutType, setWorkoutType] = useState<'squat' | 'pushup' | 'walk' | 'dance'>('squat');
 
+  // 다중 세트 및 시간 기반 루틴 관련 신규 상태
+  const [workoutMode, setWorkoutMode] = useState<'rep' | 'time'>('rep');
+  const [totalSets, setTotalSets] = useState<number>(3);
+  const [currentSet, setCurrentSet] = useState<number>(1);
+  const [restDuration, setRestDuration] = useState<number>(15);
+  const [workDuration, setWorkDuration] = useState<number>(30);
+  const [isResting, setIsResting] = useState<boolean>(false);
+  const [timeRemaining, setTimeRemaining] = useState<number>(0);
+
   // Dance tracker metrics state
   const [danceMetrics, setDanceMetrics] = useState<DanceMetrics>({
     activeDurationMs: 0,
@@ -40,8 +49,24 @@ export default function App() {
   const wakeLockSentinelRef = useRef<any | null>(null);
   const blackSaverTimerRef = useRef<number | null>(null);
 
+  // 클로저 이슈 해결을 위한 Refs 선언
+  const currentSetRef = useRef(1);
+  const totalSetsRef = useRef(3);
+  const workoutModeRef = useRef<'rep' | 'time'>('rep');
+  const restDurationRef = useRef(15);
+  const isRestingRef = useRef(false);
+
+  useEffect(() => {
+    currentSetRef.current = currentSet;
+    totalSetsRef.current = totalSets;
+    workoutModeRef.current = workoutMode;
+    restDurationRef.current = restDuration;
+    isRestingRef.current = isResting;
+  });
+
   // Audio Context 싱글톤으로 유지하기 위한 Ref
   const audioContextRef = useRef<AudioContext | null>(null);
+
 
   // 모바일 브라우저의 오디오 락 강제 해제용 더미 오디오 소스 재생 함수
   const unlockAudioContext = (ctx: AudioContext) => {
@@ -81,6 +106,27 @@ export default function App() {
       console.error('AudioContext 생성/재개 실패:', e);
       return null;
     }
+  };
+
+  // 4. 휴식 만료 3초 전 준비 비프 (짧은 삑 소리)
+  const playCountdownTick = () => {
+    const ctx = getOrCreateAudioContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 523.25; // C5 (도)
+
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.1, now + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.08);
   };
 
   // 1. 운동 시작 차임 (도-미-솔 상승음)
@@ -252,7 +298,8 @@ export default function App() {
     if (blackSaverTimerRef.current) {
       window.clearTimeout(blackSaverTimerRef.current);
     }
-    if (isActive) {
+    // 휴식 중에는 블랙 세이버를 비활성화합니다.
+    if (isActive && !isResting) {
       blackSaverTimerRef.current = window.setTimeout(() => {
         setShowBlackSaver(true);
       }, 10000); // 10초간 무터치 상태 지속 시 가동
@@ -279,16 +326,16 @@ export default function App() {
     };
   }, [isActive]);
 
-  // 사용자 무터치 타이머 관리
+  // 사용자 무터치 타이머 관리 (휴식 상태 변화 대응)
   useEffect(() => {
-    if (isActive) {
+    if (isActive && !isResting) {
       resetBlackSaverTimer();
     } else {
       clearBlackSaverTimer();
       setShowBlackSaver(false);
     }
     return () => clearBlackSaverTimer();
-  }, [isActive]);
+  }, [isActive, isResting]);
 
   // 전역 터치/마우스 이벤트 감지로 타이머 리셋
   useEffect(() => {
@@ -301,7 +348,7 @@ export default function App() {
       window.removeEventListener('touchstart', handleUserActivity);
       window.removeEventListener('mousedown', handleUserActivity);
     };
-  }, [isActive]);
+  }, [isActive, isResting]);
 
   // 컴포넌트 언마운트 시 리소스 정리
   useEffect(() => {
@@ -312,6 +359,112 @@ export default function App() {
       clearBlackSaverTimer();
     };
   }, []);
+
+  // 다중 세트 및 시간 기반 루틴 타이머 구동
+  useEffect(() => {
+    let timerId: number | null = null;
+    if (isActive) {
+      timerId = window.setInterval(() => {
+        if (isResting) {
+          // 세트 간 휴식 중 카운트다운
+          setTimeRemaining((prev) => {
+            if (prev <= 1) {
+              if (timerId) clearInterval(timerId);
+              
+              setIsResting(false);
+              const nextSet = currentSet + 1;
+              setCurrentSet(nextSet);
+              setCount(0);
+              
+              playStartChime();
+              
+              if (workoutType !== 'dance') {
+                if (workoutMode === 'time') {
+                  setTimeRemaining(workDuration);
+                }
+                counterRef.current?.reset();
+                counterRef.current?.start();
+              }
+              resetBlackSaverTimer();
+              return 0;
+            }
+            // 3초 전 알림음
+            if (prev <= 4) {
+              playCountdownTick();
+            }
+            return prev - 1;
+          });
+        } else {
+          // 운동 중 (시간 기반 모드일 때만 카운트다운 작동)
+          if (workoutMode === 'time' && workoutType !== 'dance') {
+            setTimeRemaining((prev) => {
+              if (prev <= 1) {
+                if (timerId) clearInterval(timerId);
+                setTimeout(() => {
+                  handleSetCompleted();
+                }, 100);
+                return 0;
+              }
+              return prev - 1;
+            });
+          }
+        }
+      }, 1000);
+    }
+
+    return () => {
+      if (timerId) clearInterval(timerId);
+    };
+  }, [isActive, isResting, currentSet, totalSets, workoutMode, workDuration, restDuration, workoutType]);
+
+  // 세트 완료 처리 공통 함수
+  const handleSetCompleted = () => {
+    // 센서 일시 정지
+    if (workoutType !== 'dance') {
+      counterRef.current?.stop();
+    }
+    
+    const curSet = currentSetRef.current;
+    const totSets = totalSetsRef.current;
+    
+    if (curSet < totSets) {
+      // 다음 세트가 있음 -> 휴식 진입
+      setIsResting(true);
+      setTimeRemaining(restDurationRef.current);
+      playRepCompleteChime(); // 중간 세트 완료음
+      triggerVibration([100, 50, 100]);
+      
+      // 휴식 중에는 블랙 세이버 해제
+      clearBlackSaverTimer();
+      setShowBlackSaver(false);
+    } else {
+      // 최종 세트 완료
+      setIsCompleted(true);
+      setIsActive(false);
+      releaseWakeLock(); // 화면 꺼짐 해제
+      playSetCompleteFanfare(); // 팡파르
+      triggerVibration([100, 50, 100, 50, 200]);
+    }
+  };
+
+  // 휴식 건너뛰기 처리 함수
+  const handleSkipRest = () => {
+    setIsResting(false);
+    const nextSet = currentSet + 1;
+    setCurrentSet(nextSet);
+    setCount(0);
+    
+    playStartChime();
+    
+    if (workoutType !== 'dance') {
+      if (workoutMode === 'time') {
+        setTimeRemaining(workDuration);
+      }
+      counterRef.current?.reset();
+      counterRef.current?.start();
+    }
+    resetBlackSaverTimer();
+  };
 
   // Initialize Motion Engine
   useEffect(() => {
@@ -328,7 +481,9 @@ export default function App() {
       };
     } else {
       const squatCounter = new SquatCounter({
-        targetCount: targetCount === "" ? 10 : targetCount,
+        // FSM 내부의 완료 판정이 직접 운동을 정지시키지 않도록 임시로 9999로 설정하고,
+        // 대신 리액트의 handleSetCompleted() 로직이 실제 종료를 책임지도록 우회합니다.
+        targetCount: 9999,
         thresholdDown: thresholdVal,
         thresholdUp: thresholdVal,
         minRepDurationMs: isWalk ? 300 : (isPushUp ? 800 : 1200),
@@ -349,6 +504,16 @@ export default function App() {
             playStartChime();
           }, 250);
         }
+
+        // 횟수 기반 모드에서 세트 목표 도달 여부 체크
+        if (workoutModeRef.current === 'rep') {
+          const target = targetCount === "" ? 10 : targetCount;
+          if (newCount >= target) {
+            setTimeout(() => {
+              handleSetCompleted();
+            }, 100);
+          }
+        }
       });
 
       squatCounter.onStateChange((state) => {
@@ -356,12 +521,7 @@ export default function App() {
       });
 
       squatCounter.onComplete(() => {
-        setIsCompleted(true);
-        setIsActive(false);
-        releaseWakeLock(); // 완료 시 화면 꺼짐 해제
-
-        playSetCompleteFanfare();
-        triggerVibration([100, 50, 100, 50, 200]);
+        // 내부 complete 이벤트는 무시하고 handleSetCompleted()로 이원화합니다.
       });
 
       squatCounter.onDebug((data) => {
@@ -381,7 +541,7 @@ export default function App() {
   // Motion event router
   useEffect(() => {
     const isDance = workoutType === 'dance';
-    if (!permissionGranted || !isActive || (!isDance && !counterRef.current) || (isDance && !danceTrackerRef.current)) {
+    if (!permissionGranted || !isActive || isResting || (!isDance && !counterRef.current) || (isDance && !danceTrackerRef.current)) {
       setBallOffset({ x: 0, y: 0 });
       return;
     }
@@ -455,7 +615,7 @@ export default function App() {
       window.removeEventListener('devicemotion', handleMotionEvent);
       setBallOffset({ x: 0, y: 0 });
     };
-  }, [permissionGranted, isActive, workoutType]);
+  }, [permissionGranted, isActive, workoutType, isResting]);
 
   const handleStartWorkout = async () => {
     const isDance = workoutType === 'dance';
@@ -464,6 +624,14 @@ export default function App() {
       danceTrackerRef.current.start();
     } else {
       if (!counterRef.current) return;
+      // 완전히 새로 운동을 시작하는 시나리오인 경우 상태 초기화
+      if (!isActive && !isResting && !isCompleted && count === 0 && currentSet === 1) {
+        setCurrentSet(1);
+        setIsResting(false);
+        if (workoutMode === 'time') {
+          setTimeRemaining(workDuration);
+        }
+      }
       counterRef.current.start();
     }
     
@@ -471,7 +639,6 @@ export default function App() {
     getOrCreateAudioContext();
 
     setIsCompleted(false);
-    setCount(0);
     setIsActive(true);
     playStartChime(); // Start chime sound
     await requestWakeLock(); // 화면 꺼짐 방지 활성화
@@ -498,6 +665,9 @@ export default function App() {
     setCurrentState('idle');
     setIsCompleted(false);
     setIsActive(false);
+    setCurrentSet(1);
+    setIsResting(false);
+    setTimeRemaining(0);
     setBallOffset({ x: 0, y: 0 });
     setShowBlackSaver(false);
     await releaseWakeLock(); // 화면 꺼짐 방지 해제
@@ -698,205 +868,423 @@ export default function App() {
           {!isActive && !isCompleted && (
             <div className="dashboard-card" style={{ marginBottom: '1.5rem' }}>
               {workoutType !== 'dance' ? (
-                <div className="input-group" style={{ textAlign: 'center', marginBottom: '2rem' }}>
-                  <label style={{ fontSize: '0.95rem', color: '#94a3b8', marginBottom: '1rem', display: 'block', fontWeight: '700' }}>
-                    목표 운동 세트 설정
-                  </label>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', marginTop: '0.75rem' }}>
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      min="1"
-                      max="100"
-                      value={targetCount}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (val === "") {
-                          setTargetCount("");
-                        } else {
-                          const parsed = parseInt(val, 10);
-                          if (!isNaN(parsed)) {
-                            setTargetCount(Math.min(100, Math.max(1, parsed)));
-                          }
-                        }
-                      }}
-                      onBlur={handleBlurTargetCount}
-                      className="input-field-giant"
-                    />
-                    <span style={{ fontSize: '2rem', fontWeight: '800', color: '#64748b' }}>회</span>
+                <>
+                  {/* 운동 방식 선택 (세그먼트 컨트롤) */}
+                  <div style={{
+                    display: 'flex',
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    border: '1px solid rgba(255, 255, 255, 0.05)',
+                    borderRadius: '12px',
+                    padding: '0.25rem',
+                    marginBottom: '1.5rem',
+                    width: '100%'
+                  }}>
+                    {[
+                      { id: 'rep', label: '🔢 횟수 기반' },
+                      { id: 'time', label: '⏱️ 시간 기반' }
+                    ].map((mode) => (
+                      <button
+                        key={mode.id}
+                        type="button"
+                        onClick={() => setWorkoutMode(mode.id as any)}
+                        style={{
+                          flex: 1,
+                          padding: '0.6rem 0',
+                          borderRadius: '9px',
+                          background: workoutMode === mode.id ? 'rgba(139, 92, 246, 0.2)' : 'transparent',
+                          border: workoutMode === mode.id ? '1px solid rgba(139, 92, 246, 0.4)' : '1px solid transparent',
+                          color: workoutMode === mode.id ? '#c084fc' : '#64748b',
+                          fontSize: '0.85rem',
+                          fontWeight: '700',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s'
+                        }}
+                      >
+                        {mode.label}
+                      </button>
+                    ))}
                   </div>
-                </div>
+
+                  {/* 세트 수 / 휴식 시간 입력판 그리드 */}
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(2, 1fr)',
+                    gap: '1rem',
+                    width: '100%',
+                    marginBottom: '1.5rem',
+                    textAlign: 'left'
+                  }}>
+                    {/* 목표 세트 수 */}
+                    <div>
+                      <label style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: '700', display: 'block', marginBottom: '0.4rem' }}>
+                        목표 세트 수
+                      </label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          min="1"
+                          max="10"
+                          value={totalSets}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === "") setTotalSets(1);
+                            else setTotalSets(Math.min(10, Math.max(1, parseInt(val, 10) || 1)));
+                          }}
+                          style={{
+                            width: '100%',
+                            background: 'rgba(255, 255, 255, 0.05)',
+                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            borderRadius: '10px',
+                            padding: '0.6rem',
+                            color: '#fff',
+                            fontSize: '1rem',
+                            fontWeight: '700',
+                            textAlign: 'center'
+                          }}
+                        />
+                        <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '700' }}>세트</span>
+                      </div>
+                    </div>
+
+                    {/* 세트 간 휴식 시간 */}
+                    <div>
+                      <label style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: '700', display: 'block', marginBottom: '0.4rem' }}>
+                        세트 간 휴식
+                      </label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          min="5"
+                          max="90"
+                          value={restDuration}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === "") setRestDuration(5);
+                            else setRestDuration(Math.min(90, Math.max(5, parseInt(val, 10) || 5)));
+                          }}
+                          style={{
+                            width: '100%',
+                            background: 'rgba(255, 255, 255, 0.05)',
+                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            borderRadius: '10px',
+                            padding: '0.6rem',
+                            color: '#fff',
+                            fontSize: '1rem',
+                            fontWeight: '700',
+                            textAlign: 'center'
+                          }}
+                        />
+                        <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '700' }}>초</span>
+                      </div>
+                    </div>
+
+                    {/* 횟수 기반일 때 세트당 목표 횟수 */}
+                    {workoutMode === 'rep' && (
+                      <div style={{ gridColumn: 'span 2', textAlign: 'center', marginTop: '0.5rem' }}>
+                        <label style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: '700', display: 'block', marginBottom: '0.5rem' }}>
+                          세트당 목표 횟수
+                        </label>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            min="1"
+                            max="100"
+                            value={targetCount}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === "") {
+                                setTargetCount("");
+                              } else {
+                                const parsed = parseInt(val, 10);
+                                if (!isNaN(parsed)) {
+                                  setTargetCount(Math.min(100, Math.max(1, parsed)));
+                                }
+                              }
+                            }}
+                            onBlur={handleBlurTargetCount}
+                            className="input-field-giant"
+                            style={{ margin: 0 }}
+                          />
+                          <span style={{ fontSize: '1.5rem', fontWeight: '800', color: '#64748b' }}>회</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 시간 기반일 때 세트당 운동 시간 */}
+                    {workoutMode === 'time' && (
+                      <div style={{ gridColumn: 'span 2', textAlign: 'center', marginTop: '0.5rem' }}>
+                        <label style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: '700', display: 'block', marginBottom: '0.5rem' }}>
+                          세트당 운동 시간
+                        </label>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            min="10"
+                            max="300"
+                            value={workDuration}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === "") setWorkDuration(10);
+                              else setWorkDuration(Math.min(300, Math.max(10, parseInt(val, 10) || 10)));
+                            }}
+                            className="input-field-giant"
+                            style={{ margin: 0 }}
+                          />
+                          <span style={{ fontSize: '1.5rem', fontWeight: '800', color: '#64748b' }}>초</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 민감도 설정 슬라이더 */}
+                    <div style={{ gridColumn: 'span 2', marginTop: '1rem', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '1rem' }}>
+                      <label style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: '700', display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                        <span>🏃 운동 감지 민감도</span>
+                        <span style={{ color: '#c084fc' }}>{sensitivity} / 10</span>
+                      </label>
+                      <input
+                        type="range"
+                        min="1"
+                        max="10"
+                        value={sensitivity}
+                        onChange={(e) => setSensitivity(parseInt(e.target.value, 10))}
+                        style={{
+                          width: '100%',
+                          background: 'rgba(255, 255, 255, 0.1)',
+                          height: '6px',
+                          borderRadius: '3px',
+                          outline: 'none',
+                          WebkitAppearance: 'none',
+                          accentColor: '#8b5cf6',
+                          cursor: 'pointer'
+                        }}
+                      />
+                      <span style={{ fontSize: '0.7rem', color: '#64748b', display: 'block', marginTop: '0.4rem', lineHeight: '1.4' }}>
+                        ※ 값이 높을수록 미세한 움직임도 감지합니다. 푸시업이나 작은 폭의 운동일 때 높여주세요.
+                      </span>
+                    </div>
+                  </div>
+                </>
               ) : (
-                <div className="input-group" style={{ textAlign: 'center', marginBottom: '2rem' }}>
-                  <Music size={40} color="#8b5cf6" style={{ margin: '0 auto 0.75rem auto', animation: 'spin 10s linear infinite' }} />
-                  <label style={{ fontSize: '1.1rem', color: '#fff', marginBottom: '0.5rem', display: 'block', fontWeight: '700' }}>
-                    자유 댄스 모드 (Freestyle Dance)
-                  </label>
-                  <span style={{ fontSize: '0.85rem', color: '#64748b', display: 'block', margin: '0.5rem 0' }}>
-                    시간, 움직임 에너지 및 추정 칼로리를 계측합니다.
-                  </span>
+                <div className="input-group" style={{ textAlign: 'center', margin: '0.5rem 0' }}>
+                  <p style={{ color: '#94a3b8', fontSize: '0.9rem', lineHeight: '1.6' }}>
+                    🎵 댄스 모드는 주머니에 스마트폰을 넣고 자유롭게 리듬을 타며 춤을 추는 모드입니다.<br />
+                    세트나 횟수 제한 없이 소모 칼로리와 춤 시간을 측정합니다.
+                  </p>
                 </div>
               )}
-
-              {/* Sensitivity Control Slider (댄스 모드는 민감도 불필요) */}
-              {workoutType !== 'dance' && (
-                <div className="input-group" style={{ textAlign: 'center', marginBottom: '2rem', width: '100%' }}>
-                  <label style={{ fontSize: '0.95rem', color: '#94a3b8', marginBottom: '0.5rem', display: 'block', fontWeight: '700' }}>
-                    센서 민감도 설정: <span style={{ color: '#8b5cf6' }}>{sensitivity}</span> {sensitivity === 5 ? '(보통)' : sensitivity > 5 ? '(민감)' : '(둔감)'}
-                  </label>
-                  <input
-                    type="range"
-                    min="1"
-                    max="10"
-                    value={sensitivity}
-                    onChange={(e) => setSensitivity(parseInt(e.target.value, 10))}
-                    style={{
-                      width: '100%',
-                      accentColor: '#8b5cf6',
-                      height: '6px',
-                      borderRadius: '3px',
-                      background: 'rgba(255, 255, 255, 0.1)',
-                      outline: 'none',
-                      marginTop: '0.5rem',
-                      cursor: 'pointer'
-                    }}
-                  />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#64748b', marginTop: '0.4rem' }}>
-                    <span>둔감함 (큰 움직임)</span>
-                    <span>민감함 (작은 움직임)</span>
-                  </div>
-                </div>
-              )}
-
-              <button className="btn-main start" onClick={handleStartWorkout}>
-                <Play size={20} />
-                운동 시작하기
-              </button>
             </div>
           )}
 
           {/* Active Workout Board */}
           {(isActive || isCompleted) && (
             <div className={`dashboard-card ${isActive ? 'active' : ''}`} style={{ marginBottom: '1.5rem' }}>
-              {/* Pocket alignment guide */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: '#64748b', marginBottom: '1rem', width: '100%' }}>
-                <Smartphone size={14} style={{ flexShrink: 0 }} />
-                <span>
-                  {workoutType === 'squat' && '우측 앞바지 주머니에 스마트폰을 고정하세요.'}
-                  {workoutType === 'pushup' && '바지 주머니에 스마트폰을 고정하고 엉덩이를 낮췄다 올리세요.'}
-                  {workoutType === 'walk' && '스마트폰을 바지 앞주머니에 넣고 걸으세요. (10보 주기 소리 피드백)'}
-                  {workoutType === 'dance' && '스마트폰을 주머니에 넣고 자유롭게 리듬을 타며 춤추세요.'}
-                </span>
-              </div>
-
-              {/* State Badge (댄스는 불필요) */}
-              {workoutType !== 'dance' && (
-                <div className={getStatusClass(currentState)}>
-                  {getStatusText(currentState)}
-                </div>
-              )}
-
-              {/* Inertia Motion Visualizer (관성 구슬 원형 UI) */}
-              <div className="motion-container">
-                <div 
-                  className="motion-ball" 
-                  style={{ 
-                    transform: `translate3d(${ballOffset.x}px, ${ballOffset.y}px, 0)` 
-                  }} 
-                />
-              </div>
-
-              {/* Big Count Screen / Dance metrics UI */}
-              {workoutType !== 'dance' ? (
-                <>
-                  <div className={`counter-display ${bump ? 'bump' : ''}`}>
-                    {count}
+              {isResting ? (
+                /* 휴식 중 화면 */
+                <div style={{ 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  padding: '2rem 1rem',
+                  textAlign: 'center',
+                  width: '100%'
+                }}>
+                  <div className="rest-timer-circle">
+                    <span className="rest-timer-val">{timeRemaining}</span>
+                    <span className="rest-timer-unit">초</span>
                   </div>
-                  <div style={{ fontSize: '0.95rem', color: '#64748b', marginBottom: '2rem' }}>
-                    목표 회수: <strong style={{ color: '#fff' }}>{targetCount || 10}</strong> 회
+                  <h3 style={{ margin: '1.5rem 0 0.5rem 0', color: '#c084fc', fontSize: '1.25rem', fontWeight: '800' }}>🔋 세트 간 휴식 중</h3>
+                  <p style={{ color: '#64748b', fontSize: '0.85rem', marginBottom: '2rem' }}>
+                    다음은 {currentSet + 1}세트가 시작됩니다. 잠시 몸을 편안히 하세요.
+                  </p>
+                  <button 
+                    className="btn-main start" 
+                    onClick={handleSkipRest}
+                    style={{
+                      background: 'rgba(139, 92, 246, 0.15)',
+                      border: '1px solid rgba(139, 92, 246, 0.3)',
+                      color: '#c084fc',
+                      maxWidth: '180px',
+                      padding: '0.75rem 1rem',
+                      fontSize: '0.9rem'
+                    }}
+                  >
+                    휴식 건너뛰기 ➡️
+                  </button>
+                </div>
+              ) : (
+                /* 운동 중 화면 */
+                <>
+                  {/* 세트 진행 현황 표시 */}
+                  {workoutType !== 'dance' && (
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      width: '100%',
+                      marginBottom: '1rem',
+                      background: 'rgba(255,255,255,0.02)',
+                      border: '1px solid rgba(255,255,255,0.05)',
+                      padding: '0.5rem 0.75rem',
+                      borderRadius: '10px'
+                    }}>
+                      <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: '700' }}>
+                        🏋️ 진행 세트: <strong style={{ color: '#fff' }}>{currentSet} / {totalSets}</strong> 세트
+                      </span>
+                      <span style={{ 
+                        fontSize: '0.7rem', 
+                        color: workoutMode === 'time' ? '#38bdf8' : '#c084fc', 
+                        fontWeight: '800',
+                        background: workoutMode === 'time' ? 'rgba(56, 189, 248, 0.1)' : 'rgba(192, 132, 252, 0.1)',
+                        padding: '0.2rem 0.5rem',
+                        borderRadius: '6px'
+                      }}>
+                        {workoutMode === 'time' ? '⏱️ 시간제' : '🔢 횟수제'}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Pocket alignment guide */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: '#64748b', marginBottom: '1rem', width: '100%' }}>
+                    <Smartphone size={14} style={{ flexShrink: 0 }} />
+                    <span>
+                      {workoutType === 'squat' && '우측 앞바지 주머니에 스마트폰을 고정하세요.'}
+                      {workoutType === 'pushup' && '바지 주머니에 스마트폰을 고정하고 엉덩이를 낮췄다 올리세요.'}
+                      {workoutType === 'walk' && '스마트폰을 바지 앞주머니에 넣고 걸으세요. (10보 주기 소리 피드백)'}
+                      {workoutType === 'dance' && '스마트폰을 주머니에 넣고 자유롭게 리듬을 타며 춤추세요.'}
+                    </span>
+                  </div>
+
+                  {/* State Badge (댄스는 불필요) */}
+                  {workoutType !== 'dance' && (
+                    <div className={getStatusClass(currentState)}>
+                      {getStatusText(currentState)}
+                    </div>
+                  )}
+
+                  {/* Inertia Motion Visualizer (관성 구슬 원형 UI) */}
+                  <div className="motion-container">
+                    <div 
+                      className="motion-ball" 
+                      style={{ 
+                        transform: `translate3d(${ballOffset.x}px, ${ballOffset.y}px, 0)` 
+                      }} 
+                    />
+                  </div>
+
+                  {/* Big Count Screen / Dance metrics UI */}
+                  {workoutType !== 'dance' ? (
+                    <>
+                      {workoutMode === 'rep' ? (
+                        <>
+                          <div className={`counter-display ${bump ? 'bump' : ''}`}>
+                            {count}
+                          </div>
+                          <div style={{ fontSize: '0.95rem', color: '#64748b', marginBottom: '2rem' }}>
+                            목표 회수: <strong style={{ color: '#fff' }}>{targetCount || 10}</strong> 회
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="counter-display" style={{ color: '#38bdf8', fontFamily: 'monospace' }}>
+                            {timeRemaining}s
+                          </div>
+                          <div style={{ fontSize: '0.95rem', color: '#64748b', marginBottom: '2rem' }}>
+                            현재 수행 횟수: <strong style={{ color: '#fff' }}>{count}</strong> 회 / 세트 시간: {workDuration}초
+                          </div>
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    <div style={{ width: '100%', marginBottom: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                      {/* Live Gauge */}
+                      <div className="dance-intensity-wrapper">
+                        <div className="dance-intensity-label">
+                          <span>실시간 춤 강도</span>
+                          <span style={{ color: '#d946ef' }}>{danceMetrics.intensity}%</span>
+                        </div>
+                        <div className="dance-intensity-bar-container">
+                          <div 
+                            className="dance-intensity-bar" 
+                            style={{ width: `${danceMetrics.intensity}%` }}
+                          />
+                        </div>
+                      </div>
+                      
+                      {/* Dance Metrics Grid */}
+                      <div className="dance-metrics-grid">
+                        <div className="dance-metric-card">
+                          <div className="dance-metric-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.2rem' }}>
+                            <Clock size={12} color="#8b5cf6" />
+                            <span>춤춘 시간</span>
+                          </div>
+                          <div className="dance-metric-value">
+                            {formatDuration(danceMetrics.activeDurationMs)}
+                          </div>
+                        </div>
+                        <div className="dance-metric-card">
+                          <div className="dance-metric-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.2rem' }}>
+                            <Music size={12} color="#a78bfa" />
+                            <span>에너지 점수</span>
+                          </div>
+                          <div className="dance-metric-value">
+                            {danceMetrics.totalEnergy}
+                          </div>
+                        </div>
+                        <div className="dance-metric-card">
+                          <div className="dance-metric-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.2rem' }}>
+                            <Flame size={12} color="#ec4899" />
+                            <span>소모 칼로리</span>
+                          </div>
+                          <div className="dance-metric-value" style={{ color: '#ec4899' }}>
+                            {danceMetrics.estimatedCalories} <span style={{ fontSize: '0.65rem', color: '#64748b' }}>kcal</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Stop & Pause controls */}
+                  <div style={{ width: '100%', display: 'flex', gap: '1rem' }}>
+                    {isActive ? (
+                      <button className="btn-main stop" onClick={handleStopWorkout}>
+                        <Square size={18} />
+                        일시 중지
+                      </button>
+                    ) : (
+                      <button className="btn-main start" onClick={handleStartWorkout}>
+                        <Play size={18} />
+                        이어서 진행
+                      </button>
+                    )}
+                    <button
+                      onClick={handleReset}
+                      style={{
+                        width: '60px',
+                        height: '58px',
+                        borderRadius: '16px',
+                        background: 'rgba(255, 255, 255, 0.05)',
+                        border: '1px solid var(--border-color)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        color: '#fff'
+                      }}
+                    >
+                      <RefreshCw size={20} />
+                    </button>
                   </div>
                 </>
-              ) : (
-                <div style={{ width: '100%', marginBottom: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                  {/* Live Gauge */}
-                  <div className="dance-intensity-wrapper">
-                    <div className="dance-intensity-label">
-                      <span>실시간 춤 강도</span>
-                      <span style={{ color: '#d946ef' }}>{danceMetrics.intensity}%</span>
-                    </div>
-                    <div className="dance-intensity-bar-container">
-                      <div 
-                        className="dance-intensity-bar" 
-                        style={{ width: `${danceMetrics.intensity}%` }}
-                      />
-                    </div>
-                  </div>
-                  
-                  {/* Dance Metrics Grid */}
-                  <div className="dance-metrics-grid">
-                    <div className="dance-metric-card">
-                      <div className="dance-metric-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.2rem' }}>
-                        <Clock size={12} color="#8b5cf6" />
-                        <span>춤춘 시간</span>
-                      </div>
-                      <div className="dance-metric-value">
-                        {formatDuration(danceMetrics.activeDurationMs)}
-                      </div>
-                    </div>
-                    <div className="dance-metric-card">
-                      <div className="dance-metric-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.2rem' }}>
-                        <Music size={12} color="#a78bfa" />
-                        <span>에너지 점수</span>
-                      </div>
-                      <div className="dance-metric-value">
-                        {danceMetrics.totalEnergy}
-                      </div>
-                    </div>
-                    <div className="dance-metric-card">
-                      <div className="dance-metric-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.2rem' }}>
-                        <Flame size={12} color="#ec4899" />
-                        <span>소모 칼로리</span>
-                      </div>
-                      <div className="dance-metric-value" style={{ color: '#ec4899' }}>
-                        {danceMetrics.estimatedCalories} <span style={{ fontSize: '0.65rem', color: '#64748b' }}>kcal</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
               )}
-
-              {/* Stop & Pause controls */}
-              <div style={{ width: '100%', display: 'flex', gap: '1rem' }}>
-                {isActive ? (
-                  <button className="btn-main stop" onClick={handleStopWorkout}>
-                    <Square size={18} />
-                    일시 중지
-                  </button>
-                ) : (
-                  <button className="btn-main start" onClick={handleStartWorkout}>
-                    <Play size={18} />
-                    이어서 진행
-                  </button>
-                )}
-                <button
-                  onClick={handleReset}
-                  style={{
-                    width: '60px',
-                    height: '58px',
-                    borderRadius: '16px',
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid var(--border-color)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    color: '#fff'
-                  }}
-                >
-                  <RefreshCw size={20} />
-                </button>
-              </div>
             </div>
           )}
 
@@ -904,12 +1292,15 @@ export default function App() {
           {isCompleted && (
             <div className="overlay">
               <Award size={80} color="#ffd000" style={{ marginBottom: '1rem', animation: 'pulse-border 1.5s infinite' }} />
-              <div className="celebration-title">세트 완료!</div>
-              <p style={{ color: '#94a3b8', fontSize: '1.1rem', margin: '0 0 2rem 0' }}>
-                {
-                  workoutType === 'squat' ? '스쿼트' :
-                  workoutType === 'pushup' ? '푸시업' : '걷기'
-                } <strong>{targetCount || 10}회</strong> 목표를 성공적으로 완료했습니다!
+              <div className="celebration-title">전체 세트 완료!</div>
+              <p style={{ color: '#94a3b8', fontSize: '1.15rem', margin: '0 0 2rem 0', lineHeight: '1.6' }}>
+                축하합니다! {
+                  workoutType === 'squat' ? '🦵 스쿼트' :
+                  workoutType === 'pushup' ? '💪 푸시업' : '🚶 걷기'
+                } <strong>{totalSets}세트</strong>를 모두 마쳤습니다.<br />
+                <span style={{ fontSize: '0.95rem', color: '#64748b' }}>
+                  ({workoutMode === 'rep' ? `세트당 목표: ${targetCount || 10}회` : `세트당 시간: ${workDuration}초`})
+                </span>
               </p>
               <div style={{ width: '100%', maxWidth: '280px' }}>
                 <button className="btn-main start" onClick={handleReset}>

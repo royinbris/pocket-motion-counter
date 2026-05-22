@@ -539,3 +539,54 @@ header p {
   box-shadow: 0 0 10px rgba(217, 70, 239, 0.5);
 }
 
+/* 세트 간 휴식 원형 타이머 */
+.rest-timer-circle {
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, rgba(20, 26, 38, 0.4) 100%);
+  border: 3px solid rgba(139, 92, 246, 0.45);
+  box-shadow: 0 0 25px rgba(139, 92, 246, 0.25), inset 0 0 20px rgba(139, 92, 246, 0.15);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin: 1rem auto;
+  animation: rest-pulse 2s infinite ease-in-out;
+}
+
+.rest-timer-val {
+  font-family: 'Outfit', sans-serif;
+  font-size: 3.5rem;
+  font-weight: 900;
+  line-height: 1;
+  color: #c084fc;
+  text-shadow: 0 0 10px rgba(192, 132, 252, 0.6);
+}
+
+.rest-timer-unit {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #64748b;
+  margin-top: 0.2rem;
+  letter-spacing: 0.05em;
+}
+
+@keyframes rest-pulse {
+  0% {
+    transform: scale(1);
+    border-color: rgba(139, 92, 246, 0.45);
+    box-shadow: 0 0 25px rgba(139, 92, 246, 0.25), inset 0 0 20px rgba(139, 92, 246, 0.15);
+  }
+  50% {
+    transform: scale(1.05);
+    border-color: rgba(192, 132, 252, 0.85);
+    box-shadow: 0 0 35px rgba(192, 132, 252, 0.45), inset 0 0 25px rgba(192, 132, 252, 0.25);
+  }
+  100% {
+    transform: scale(1);
+    border-color: rgba(139, 92, 246, 0.45);
+    box-shadow: 0 0 25px rgba(139, 92, 246, 0.25), inset 0 0 20px rgba(139, 92, 246, 0.15);
+  }
+}
+
