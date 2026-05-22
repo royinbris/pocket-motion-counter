@@ -3,6 +3,10 @@ import { Play, Square, RefreshCw, Trophy, ShieldAlert, Award, Smartphone } from 
 import { SquatCounter } from '@pocket-motion/core';
 import { MotionSample, CounterState } from '@pocket-motion/types';
 
+// Vite define 매크로를 통한 글로벌 컴파일 타임 상수
+declare const __APP_VERSION__: string;
+declare const __BUILD_TIME__: string;
+
 export default function App() {
   const [permissionGranted, setPermissionGranted] = useState<boolean | null>(null);
   const [isActive, setIsActive] = useState(false);
@@ -444,8 +448,11 @@ export default function App() {
         </>
       )}
 
-      <footer style={{ textAlign: 'center', fontSize: '0.75rem', color: '#475569', marginTop: 'auto', paddingTop: '2rem' }}>
-        Pocket Motion Counter Demo v1.0.0
+      <footer style={{ textAlign: 'center', fontSize: '0.75rem', color: '#475569', marginTop: 'auto', paddingTop: '2rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+        <div>Pocket Motion Counter Demo v1.0.2</div>
+        <div style={{ color: '#334155', fontSize: '0.65rem' }}>
+          배포 버전: {__APP_VERSION__} ({__BUILD_TIME__})
+        </div>
       </footer>
     </div>
   );
