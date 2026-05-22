@@ -315,10 +315,14 @@ export default function App() {
     <div className="app-container">
       <header>
         <h1>POCKET MOTION</h1>
-        <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.25rem', letterSpacing: '0.05em', fontWeight: '500' }}>
-          v1.0.2 ({__APP_VERSION__})
+        <div style={{ fontSize: '0.85rem', color: '#8b5cf6', marginTop: '0.4rem', letterSpacing: '0.05em', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem' }}>
+          <span>🚀</span>
+          <span>v1.0.2 ({__APP_VERSION__})</span>
         </div>
-        <p style={{ marginTop: '0.5rem' }}>주머니 속 센서 기반 스쿼트 카운터</p>
+        <div style={{ fontSize: '0.65rem', color: '#475569', marginTop: '0.2rem' }}>
+          빌드: {__BUILD_TIME__}
+        </div>
+        <p style={{ marginTop: '0.6rem' }}>주머니 속 센서 기반 스쿼트 카운터</p>
       </header>
 
       {/* Permission Block */}
