@@ -17,6 +17,20 @@ export default function App() {
   // Audio Context 싱글톤으로 유지하기 위한 Ref
   const audioContextRef = useRef<AudioContext | null>(null);
 
+  // 모바일 브라우저의 오디오 락 강제 해제용 더미 오디오 소스 재생 함수
+  const unlockAudioContext = (ctx: AudioContext) => {
+    try {
+      const buffer = ctx.createBuffer(1, 1, 22050);
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+      source.start(0);
+      source.stop(0.001);
+    } catch (e) {
+      console.warn('더미 오디오 재생 실패 (무시 가능):', e);
+    }
+  };
+
   // Audio Context 가져오기 (없으면 생성하고, suspended 상태면 resume)
   const getOrCreateAudioContext = (): AudioContext | null => {
     try {
@@ -27,8 +41,14 @@ export default function App() {
         }
       }
       const ctx = audioContextRef.current;
-      if (ctx && ctx.state === 'suspended') {
-        ctx.resume();
+      if (ctx) {
+        if (ctx.state === 'suspended') {
+          ctx.resume().then(() => {
+            unlockAudioContext(ctx);
+          });
+        } else {
+          unlockAudioContext(ctx);
+        }
       }
       return ctx;
     } catch (e) {
@@ -97,20 +117,24 @@ export default function App() {
     if (!ctx) return;
 
     const now = ctx.currentTime;
+    // 차임벨(딩동~)이 끝난 뒤에 빵빠레가 겹치지 않고 자연스럽게 이어지도록 0.4초 시작 딜레이 부여
+    const fanfareDelay = 0.4;
+
     const playNote = (freq: number, startDelay: number, duration: number, type: OscillatorType = 'triangle') => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = type;
       osc.frequency.value = freq;
 
-      gain.gain.setValueAtTime(0, now + startDelay);
-      gain.gain.linearRampToValueAtTime(0.2, now + startDelay + 0.05);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + startDelay + duration);
+      const scheduleTime = now + fanfareDelay + startDelay;
+      gain.gain.setValueAtTime(0, scheduleTime);
+      gain.gain.linearRampToValueAtTime(0.2, scheduleTime + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.001, scheduleTime + duration);
 
       osc.connect(gain);
       gain.connect(ctx.destination);
-      osc.start(now + startDelay);
-      osc.stop(now + startDelay + duration);
+      osc.start(scheduleTime);
+      osc.stop(scheduleTime + duration);
     };
 
     const tempo = 0.12;
@@ -178,12 +202,9 @@ export default function App() {
       setBump(true);
       setTimeout(() => setBump(false), 200);
 
-      // 목표 회수에 도달하기 전 일반 회차에서만 즉시 차임벨과 진동 피드백 제공
-      // 마지막 10번째 등 목표 회차 성공 시에는 onComplete 리스너에서 단독으로 빵빠레만 울리도록 처리
-      if (newCount < targetCount) {
-        playRepCompleteChime();
-        triggerVibration(180); // 180ms vibration
-      }
+      // 매 회차마다 즉시 차임벨과 진동 피드백 제공 (마지막 횟수 포함)
+      playRepCompleteChime();
+      triggerVibration(180); // 180ms vibration
     });
 
     squatCounter.onStateChange((state) => {
@@ -321,17 +342,24 @@ export default function App() {
         <>
           {/* Settings before workout */}
           {!isActive && !isCompleted && (
-            <div className="dashboard-card" style={{ marginBottom: '1.5rem', alignItems: 'stretch' }}>
-              <div className="input-group">
-                <label>목표 운동 세트 설정 (회)</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="100"
-                  value={targetCount}
-                  onChange={(e) => setTargetCount(Math.max(1, parseInt(e.target.value) || 1))}
-                  className="input-field"
-                />
+            <div className="dashboard-card" style={{ marginBottom: '1.5rem' }}>
+              <div className="input-group" style={{ textAlign: 'center', marginBottom: '2rem' }}>
+                <label style={{ fontSize: '0.95rem', color: '#94a3b8', marginBottom: '1rem', display: 'block', fontWeight: '700' }}>
+                  목표 운동 세트 설정
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', marginTop: '0.75rem' }}>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    min="1"
+                    max="100"
+                    value={targetCount}
+                    onChange={(e) => setTargetCount(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="input-field-giant"
+                  />
+                  <span style={{ fontSize: '2rem', fontWeight: '800', color: '#64748b' }}>회</span>
+                </div>
               </div>
               <button className="btn-main start" onClick={handleStartWorkout}>
                 <Play size={20} />
