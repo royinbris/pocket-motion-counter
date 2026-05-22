@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Play, Square, RefreshCw, Trophy, ShieldAlert, Award, Smartphone, VolumeX, ChevronDown, ChevronUp, Music, Flame, Clock } from 'lucide-react';
+import { Play, Square, RefreshCw, Trophy, ShieldAlert, Award, Smartphone, VolumeX, ChevronDown, ChevronUp, Music, Flame, Clock, X } from 'lucide-react';
 import { SquatCounter, DanceTracker, DanceMetrics } from '@pocket-motion/core';
 import { MotionSample, CounterState } from '@pocket-motion/types';
 
@@ -29,7 +29,7 @@ export default function App() {
   const [totalSets, setTotalSets] = useState<number>(3);
   const [currentSet, setCurrentSet] = useState<number>(1);
   const [restDuration, setRestDuration] = useState<number>(15);
-  const [workDuration, setWorkDuration] = useState<number>(30);
+  const [workDuration, setWorkDuration] = useState<number | "">(30);
   const [isResting, setIsResting] = useState<boolean>(false);
   const [timeRemaining, setTimeRemaining] = useState<number>(0);
 
@@ -404,7 +404,7 @@ export default function App() {
         
         if (workoutType !== 'dance') {
           if (workoutMode === 'time') {
-            setTimeRemaining(workDuration);
+            setTimeRemaining(Number(workDuration) || 30);
           }
           counterRef.current?.reset();
           counterRef.current?.start();
@@ -460,7 +460,7 @@ export default function App() {
     
     if (workoutType !== 'dance') {
       if (workoutMode === 'time') {
-        setTimeRemaining(workDuration);
+        setTimeRemaining(Number(workDuration) || 30);
       }
       counterRef.current?.reset();
       counterRef.current?.start();
@@ -631,7 +631,7 @@ export default function App() {
         setCurrentSet(1);
         setIsResting(false);
         if (workoutMode === 'time') {
-          setTimeRemaining(workDuration);
+          setTimeRemaining(Number(workDuration) || 30);
         }
       }
       counterRef.current.start();
@@ -686,6 +686,12 @@ export default function App() {
   const handleBlurTargetCount = () => {
     if (targetCount === "" || targetCount < 1) {
       setTargetCount(10);
+    }
+  };
+
+  const handleBlurWorkDuration = () => {
+    if (workDuration === "" || workDuration < 10) {
+      setWorkDuration(10);
     }
   };
 
@@ -991,28 +997,56 @@ export default function App() {
                           세트당 목표 횟수
                         </label>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-                          <input
-                            type="number"
-                            inputMode="numeric"
-                            pattern="[0-9]*"
-                            min="1"
-                            max="100"
-                            value={targetCount}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              if (val === "") {
-                                setTargetCount("");
-                              } else {
-                                const parsed = parseInt(val, 10);
-                                if (!isNaN(parsed)) {
-                                  setTargetCount(Math.min(100, Math.max(1, parsed)));
+                          <div style={{ position: 'relative', display: 'inline-block' }}>
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              min="1"
+                              max="100"
+                              value={targetCount}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                if (val === "") {
+                                  setTargetCount("");
+                                } else {
+                                  const parsed = parseInt(val, 10);
+                                  if (!isNaN(parsed)) {
+                                    setTargetCount(Math.min(100, Math.max(1, parsed)));
+                                  }
                                 }
-                              }
-                            }}
-                            onBlur={handleBlurTargetCount}
-                            className="input-field-giant"
-                            style={{ margin: 0 }}
-                          />
+                              }}
+                              onBlur={handleBlurTargetCount}
+                              className="input-field-giant"
+                              style={{ margin: 0, paddingRight: '2.5rem' }}
+                            />
+                            {targetCount !== "" && (
+                              <button
+                                type="button"
+                                onClick={() => setTargetCount("")}
+                                style={{
+                                  position: 'absolute',
+                                  right: '10px',
+                                  top: '50%',
+                                  transform: 'translateY(-50%)',
+                                  background: 'rgba(255, 255, 255, 0.1)',
+                                  border: 'none',
+                                  borderRadius: '50%',
+                                  width: '24px',
+                                  height: '24px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  cursor: 'pointer',
+                                  color: '#94a3b8',
+                                  padding: 0
+                                }}
+                                title="지우기"
+                              >
+                                <X size={12} />
+                              </button>
+                            )}
+                          </div>
                           <span style={{ fontSize: '1.5rem', fontWeight: '800', color: '#64748b' }}>회</span>
                         </div>
                       </div>
@@ -1025,21 +1059,56 @@ export default function App() {
                           세트당 운동 시간
                         </label>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-                          <input
-                            type="number"
-                            inputMode="numeric"
-                            pattern="[0-9]*"
-                            min="10"
-                            max="300"
-                            value={workDuration}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              if (val === "") setWorkDuration(10);
-                              else setWorkDuration(Math.min(300, Math.max(10, parseInt(val, 10) || 10)));
-                            }}
-                            className="input-field-giant"
-                            style={{ margin: 0 }}
-                          />
+                          <div style={{ position: 'relative', display: 'inline-block' }}>
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              min="10"
+                              max="86400"
+                              value={workDuration}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                if (val === "") {
+                                  setWorkDuration("");
+                                } else {
+                                  const parsed = parseInt(val, 10);
+                                  if (!isNaN(parsed)) {
+                                    setWorkDuration(Math.min(86400, Math.max(1, parsed)));
+                                  }
+                                }
+                              }}
+                              onBlur={handleBlurWorkDuration}
+                              className="input-field-giant"
+                              style={{ margin: 0, paddingRight: '2.5rem' }}
+                            />
+                            {workDuration !== "" && (
+                              <button
+                                type="button"
+                                onClick={() => setWorkDuration("")}
+                                style={{
+                                  position: 'absolute',
+                                  right: '10px',
+                                  top: '50%',
+                                  transform: 'translateY(-50%)',
+                                  background: 'rgba(255, 255, 255, 0.1)',
+                                  border: 'none',
+                                  borderRadius: '50%',
+                                  width: '24px',
+                                  height: '24px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  cursor: 'pointer',
+                                  color: '#94a3b8',
+                                  padding: 0
+                                }}
+                                title="지우기"
+                              >
+                                <X size={12} />
+                              </button>
+                            )}
+                          </div>
                           <span style={{ fontSize: '1.5rem', fontWeight: '800', color: '#64748b' }}>초</span>
                         </div>
                       </div>
