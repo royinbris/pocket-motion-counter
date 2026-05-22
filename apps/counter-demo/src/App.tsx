@@ -1057,16 +1057,7 @@ export default function App() {
                         max="10"
                         value={sensitivity}
                         onChange={(e) => setSensitivity(parseInt(e.target.value, 10))}
-                        style={{
-                          width: '100%',
-                          background: 'rgba(255, 255, 255, 0.1)',
-                          height: '6px',
-                          borderRadius: '3px',
-                          outline: 'none',
-                          WebkitAppearance: 'none',
-                          accentColor: '#8b5cf6',
-                          cursor: 'pointer'
-                        }}
+                        className="sensitivity-slider"
                       />
                       <span style={{ fontSize: '0.7rem', color: '#64748b', display: 'block', marginTop: '0.4rem', lineHeight: '1.4' }}>
                         ※ 값이 높을수록 미세한 움직임도 감지합니다. 푸시업이나 작은 폭의 운동일 때 높여주세요.
@@ -1082,6 +1073,14 @@ export default function App() {
                   </p>
                 </div>
               )}
+
+              {/* 운동 시작하기 버튼 */}
+              <div style={{ marginTop: '2rem', width: '100%' }}>
+                <button className="btn-main start" onClick={handleStartWorkout}>
+                  <Play size={18} />
+                  운동 시작하기
+                </button>
+              </div>
             </div>
           )}
 
