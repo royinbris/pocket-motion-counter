@@ -14,30 +14,117 @@ export default function App() {
 
   const counterRef = useRef<SquatCounter | null>(null);
 
-  // Sound feedback helper using Web Audio API
-  const triggerAudioFeedback = (freq: number = 880, duration: number = 0.2) => {
+  // Audio Context 싱글톤으로 유지하기 위한 Ref
+  const audioContextRef = useRef<AudioContext | null>(null);
+
+  // Audio Context 가져오기 (없으면 생성하고, suspended 상태면 resume)
+  const getOrCreateAudioContext = (): AudioContext | null => {
     try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) return;
-
-      const audioCtx = new AudioCtx();
-      const oscillator = audioCtx.createOscillator();
-      const gainNode = audioCtx.createGain();
-
-      oscillator.type = 'sine';
-      oscillator.frequency.value = freq;
-
-      gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
-
-      oscillator.connect(gainNode);
-      gainNode.connect(audioCtx.destination);
-
-      oscillator.start();
-      oscillator.stop(audioCtx.currentTime + duration);
+      if (!audioContextRef.current) {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) {
+          audioContextRef.current = new AudioCtx();
+        }
+      }
+      const ctx = audioContextRef.current;
+      if (ctx && ctx.state === 'suspended') {
+        ctx.resume();
+      }
+      return ctx;
     } catch (e) {
-      console.warn('오디오 피드백 실패 (브라우저 정책에 의해 제약될 수 있음):', e);
+      console.error('AudioContext 생성/재개 실패:', e);
+      return null;
     }
+  };
+
+  // 1. 운동 시작 차임 (도-미-솔 상승음)
+  const playStartChime = () => {
+    const ctx = getOrCreateAudioContext();
+    if (!ctx) return;
+    
+    const now = ctx.currentTime;
+    const playNote = (freq: number, startDelay: number, duration: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      
+      gain.gain.setValueAtTime(0, now + startDelay);
+      gain.gain.linearRampToValueAtTime(0.15, now + startDelay + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + startDelay + duration);
+      
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + startDelay);
+      osc.stop(now + startDelay + duration);
+    };
+
+    playNote(523.25, 0.0, 0.25); // C5
+    playNote(659.25, 0.12, 0.25); // E5
+    playNote(783.99, 0.24, 0.35); // G5
+  };
+
+  // 2. 매 회차 완료 차임 (딩~동~ 청아하고 빠른 2연음 - 지체 없이 반응)
+  const playRepCompleteChime = () => {
+    const ctx = getOrCreateAudioContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    const playNote = (freq: number, startDelay: number, duration: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle'; // triangle wave gives a warmer, flute-like chime
+      osc.frequency.value = freq;
+
+      gain.gain.setValueAtTime(0, now + startDelay);
+      gain.gain.linearRampToValueAtTime(0.25, now + startDelay + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + startDelay + duration);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + startDelay);
+      osc.stop(now + startDelay + duration);
+    };
+
+    // 솔-도 옥타브 도달음 (즉시 들리도록 매우 짧은 간격)
+    playNote(987.77, 0.0, 0.15); // B5 (High Chime 1)
+    playNote(1318.51, 0.05, 0.3); // E6 (High Chime 2)
+  };
+
+  // 3. 세트 완료 빵빠레 (화려한 트럼펫 스타일의 팡파르 연주)
+  const playSetCompleteFanfare = () => {
+    const ctx = getOrCreateAudioContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    const playNote = (freq: number, startDelay: number, duration: number, type: OscillatorType = 'triangle') => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type;
+      osc.frequency.value = freq;
+
+      gain.gain.setValueAtTime(0, now + startDelay);
+      gain.gain.linearRampToValueAtTime(0.2, now + startDelay + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + startDelay + duration);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + startDelay);
+      osc.stop(now + startDelay + duration);
+    };
+
+    const tempo = 0.12;
+    playNote(523.25, 0.0, 0.18); // C5
+    playNote(523.25, tempo, 0.18); // C5
+    playNote(523.25, tempo * 2, 0.18); // C5
+    
+    playNote(659.25, tempo * 3, 0.22); // E5
+    playNote(783.99, tempo * 4, 0.22); // G5
+    playNote(1046.50, tempo * 5, 0.6, 'sawtooth'); // C6 (강한 소투스 파형으로 시원하게 지름)
+    
+    // 풍성함을 더해주는 베이스/하모니 동시 연주
+    playNote(261.63, tempo * 5, 0.6); // C4
+    playNote(392.00, tempo * 5, 0.6); // G4
   };
 
   // Vibration feedback helper (Android support)
@@ -49,14 +136,8 @@ export default function App() {
 
   // Request sensor permission
   const handleRequestPermission = async () => {
-    // Also resume Web Audio context to satisfy safari requirements
-    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-    if (AudioCtx) {
-      const dummyCtx = new AudioCtx();
-      if (dummyCtx.state === 'suspended') {
-        dummyCtx.resume();
-      }
-    }
+    // Web Audio context 활성화
+    getOrCreateAudioContext();
 
     if (
       typeof DeviceMotionEvent !== 'undefined' &&
@@ -97,26 +178,24 @@ export default function App() {
       setBump(true);
       setTimeout(() => setBump(false), 200);
 
-      // Sound/Vibrate feedback on each successful count
-      triggerAudioFeedback(880, 0.15); // Normal High pitch beep
-      triggerVibration(150); // 150ms vibration
+      // 목표 회수에 도달하기 전 일반 회차에서만 즉시 차임벨과 진동 피드백 제공
+      // 마지막 10번째 등 목표 회차 성공 시에는 onComplete 리스너에서 단독으로 빵빠레만 울리도록 처리
+      if (newCount < targetCount) {
+        playRepCompleteChime();
+        triggerVibration(180); // 180ms vibration
+      }
     });
 
     squatCounter.onStateChange((state) => {
       setCurrentState(state);
-      // Soft feedback on posture state changes
-      if (state === 'valley') {
-        // Deep squat bottom reached: play a soft low pitch indicator
-        triggerAudioFeedback(440, 0.08);
-      }
     });
 
     squatCounter.onComplete(() => {
       setIsCompleted(true);
       setIsActive(false);
-      // Grand celebration sound and vibration pattern
-      triggerAudioFeedback(1200, 0.4);
-      setTimeout(() => triggerAudioFeedback(1500, 0.5), 150);
+      
+      // Fanfare sound
+      playSetCompleteFanfare();
       triggerVibration([100, 50, 100, 50, 200]);
     });
 
@@ -160,18 +239,21 @@ export default function App() {
 
   const handleStartWorkout = () => {
     if (!counterRef.current) return;
+    
+    // 오디오 컨텍스트 사전 활성화
+    getOrCreateAudioContext();
+
     setIsCompleted(false);
     setCount(0);
     counterRef.current.start();
     setIsActive(true);
-    triggerAudioFeedback(660, 0.2); // Start beep
+    playStartChime(); // Start chime sound
   };
 
   const handleStopWorkout = () => {
     if (!counterRef.current) return;
     counterRef.current.stop();
     setIsActive(false);
-    triggerAudioFeedback(330, 0.2); // Stop beep
   };
 
   const handleReset = () => {
