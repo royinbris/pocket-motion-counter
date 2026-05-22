@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { Play, Square, RefreshCw, Trophy, ShieldAlert, Award, Smartphone, VolumeX, ChevronDown, ChevronUp } from 'lucide-react';
-import { SquatCounter } from '@pocket-motion/core';
+import { Play, Square, RefreshCw, Trophy, ShieldAlert, Award, Smartphone, VolumeX, ChevronDown, ChevronUp, Music, Flame, Clock } from 'lucide-react';
+import { SquatCounter, DanceTracker, DanceMetrics } from '@pocket-motion/core';
 import { MotionSample, CounterState } from '@pocket-motion/types';
 
 // Vite define 매크로를 통한 글로벌 컴파일 타임 상수
@@ -22,9 +22,23 @@ export default function App() {
   const [showDebug, setShowDebug] = useState(false);
   const [debugMag, setDebugMag] = useState(0);
   const [debugFilteredMag, setDebugFilteredMag] = useState(9.8);
-  const [workoutType, setWorkoutType] = useState<'squat' | 'pushup'>('squat');
+  const [workoutType, setWorkoutType] = useState<'squat' | 'pushup' | 'walk' | 'dance'>('squat');
+
+  // Dance tracker metrics state
+  const [danceMetrics, setDanceMetrics] = useState<DanceMetrics>({
+    activeDurationMs: 0,
+    totalEnergy: 0,
+    estimatedCalories: 0,
+    intensity: 0
+  });
+
+  // Black Saver State
+  const [showBlackSaver, setShowBlackSaver] = useState(false);
 
   const counterRef = useRef<SquatCounter | null>(null);
+  const danceTrackerRef = useRef<DanceTracker | null>(null);
+  const wakeLockSentinelRef = useRef<any | null>(null);
+  const blackSaverTimerRef = useRef<number | null>(null);
 
   // Audio Context 싱글톤으로 유지하기 위한 Ref
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -201,61 +215,173 @@ export default function App() {
     }
   }, []);
 
-  // 임계값 매핑 (스쿼트는 1.8~0.6, 푸시업은 0.6~0.12의 매우 예민하고 좁은 가속도 폭 적용)
+  // 임계값 매핑 (걷기는 1.2~0.3, 스쿼트는 1.8~0.6, 푸시업은 0.6~0.12)
   const isPushUp = workoutType === 'pushup';
-  const minThreshold = isPushUp ? 0.6 : 1.8;
-  const maxThreshold = isPushUp ? 0.12 : 0.6;
+  const isWalk = workoutType === 'walk';
+  const minThreshold = isWalk ? 1.2 : (isPushUp ? 0.6 : 1.8);
+  const maxThreshold = isWalk ? 0.3 : (isPushUp ? 0.12 : 0.6);
   const thresholdVal = Number((minThreshold - (sensitivity - 1) * ((minThreshold - maxThreshold) / 9)).toFixed(2));
+
+  // Wake Lock 제어 함수
+  const requestWakeLock = async () => {
+    if ('wakeLock' in navigator) {
+      try {
+        const sentinel = await (navigator as any).wakeLock.request('screen');
+        wakeLockSentinelRef.current = sentinel;
+        console.log('Screen Wake Lock acquired.');
+      } catch (err) {
+        console.warn('Wake Lock request failed:', err);
+      }
+    }
+  };
+
+  const releaseWakeLock = async () => {
+    if (wakeLockSentinelRef.current) {
+      try {
+        await wakeLockSentinelRef.current.release();
+        wakeLockSentinelRef.current = null;
+        console.log('Screen Wake Lock released.');
+      } catch (err) {
+        console.error('Wake Lock release error:', err);
+      }
+    }
+  };
+
+  // Black Saver 타이머 제어 함수
+  const resetBlackSaverTimer = () => {
+    if (blackSaverTimerRef.current) {
+      window.clearTimeout(blackSaverTimerRef.current);
+    }
+    if (isActive) {
+      blackSaverTimerRef.current = window.setTimeout(() => {
+        setShowBlackSaver(true);
+      }, 10000); // 10초간 무터치 상태 지속 시 가동
+    }
+  };
+
+  const clearBlackSaverTimer = () => {
+    if (blackSaverTimerRef.current) {
+      window.clearTimeout(blackSaverTimerRef.current);
+      blackSaverTimerRef.current = null;
+    }
+  };
+
+  // 탭 활성/비활성 상태 변화에 따른 Wake Lock 관리
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible' && isActive) {
+        await requestWakeLock();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isActive]);
+
+  // 사용자 무터치 타이머 관리
+  useEffect(() => {
+    if (isActive) {
+      resetBlackSaverTimer();
+    } else {
+      clearBlackSaverTimer();
+      setShowBlackSaver(false);
+    }
+    return () => clearBlackSaverTimer();
+  }, [isActive]);
+
+  // 전역 터치/마우스 이벤트 감지로 타이머 리셋
+  useEffect(() => {
+    const handleUserActivity = () => {
+      resetBlackSaverTimer();
+    };
+    window.addEventListener('touchstart', handleUserActivity, { passive: true });
+    window.addEventListener('mousedown', handleUserActivity, { passive: true });
+    return () => {
+      window.removeEventListener('touchstart', handleUserActivity);
+      window.removeEventListener('mousedown', handleUserActivity);
+    };
+  }, [isActive]);
+
+  // 컴포넌트 언마운트 시 리소스 정리
+  useEffect(() => {
+    return () => {
+      if (wakeLockSentinelRef.current) {
+        wakeLockSentinelRef.current.release().catch(console.error);
+      }
+      clearBlackSaverTimer();
+    };
+  }, []);
 
   // Initialize Motion Engine
   useEffect(() => {
-    const squatCounter = new SquatCounter({
-      targetCount: targetCount === "" ? 10 : targetCount,
-      thresholdDown: thresholdVal,
-      thresholdUp: thresholdVal,
-      minRepDurationMs: isPushUp ? 800 : 1200, // 푸시업은 최소 0.8초, 스쿼트는 1.2초 보장
-      lpfAlpha: isPushUp ? 0.25 : 0.15 // 푸시업은 신호 지연 최소화를 위해 필터 계수 상향
-    });
+    if (workoutType === 'dance') {
+      const tracker = new DanceTracker();
+      tracker.onUpdate((metrics) => {
+        setDanceMetrics(metrics);
+      });
+      danceTrackerRef.current = tracker;
 
-    // Subscribe to events
-    squatCounter.onCount((newCount) => {
-      setCount(newCount);
-      setBump(true);
-      setTimeout(() => setBump(false), 200);
+      return () => {
+        tracker.stop();
+        danceTrackerRef.current = null;
+      };
+    } else {
+      const squatCounter = new SquatCounter({
+        targetCount: targetCount === "" ? 10 : targetCount,
+        thresholdDown: thresholdVal,
+        thresholdUp: thresholdVal,
+        minRepDurationMs: isWalk ? 300 : (isPushUp ? 800 : 1200),
+        lpfAlpha: isWalk ? 0.25 : (isPushUp ? 0.25 : 0.15)
+      });
 
-      // 매 회차마다 즉시 차임벨과 진동 피드백 제공 (마지막 횟수 포함)
-      playRepCompleteChime();
-      triggerVibration(180); // 180ms vibration
-    });
+      squatCounter.onCount((newCount) => {
+        setCount(newCount);
+        setBump(true);
+        setTimeout(() => setBump(false), 200);
 
-    squatCounter.onStateChange((state) => {
-      setCurrentState(state);
-    });
+        playRepCompleteChime();
+        triggerVibration(180);
 
-    squatCounter.onComplete(() => {
-      setIsCompleted(true);
-      setIsActive(false);
-      
-      // Fanfare sound
-      playSetCompleteFanfare();
-      triggerVibration([100, 50, 100, 50, 200]);
-    });
+        // 걷기 모드 전용 10보 주기 알림
+        if (workoutType === 'walk' && newCount % 10 === 0 && newCount > 0) {
+          setTimeout(() => {
+            playStartChime();
+          }, 250);
+        }
+      });
 
-    squatCounter.onDebug((data) => {
-      setDebugMag(Number(data.magnitude.toFixed(3)));
-      setDebugFilteredMag(Number(data.filteredMagnitude.toFixed(3)));
-    });
+      squatCounter.onStateChange((state) => {
+        setCurrentState(state);
+      });
 
-    counterRef.current = squatCounter;
+      squatCounter.onComplete(() => {
+        setIsCompleted(true);
+        setIsActive(false);
+        releaseWakeLock(); // 완료 시 화면 꺼짐 해제
 
-    return () => {
-      squatCounter.stop();
-    };
-  }, [targetCount, sensitivity, workoutType]);
+        playSetCompleteFanfare();
+        triggerVibration([100, 50, 100, 50, 200]);
+      });
+
+      squatCounter.onDebug((data) => {
+        setDebugMag(Number(data.magnitude.toFixed(3)));
+        setDebugFilteredMag(Number(data.filteredMagnitude.toFixed(3)));
+      });
+
+      counterRef.current = squatCounter;
+
+      return () => {
+        squatCounter.stop();
+        counterRef.current = null;
+      };
+    }
+  }, [targetCount, sensitivity, workoutType, thresholdVal, isPushUp, isWalk]);
 
   // Motion event router
   useEffect(() => {
-    if (!permissionGranted || !isActive || !counterRef.current) {
+    const isDance = workoutType === 'dance';
+    if (!permissionGranted || !isActive || (!isDance && !counterRef.current) || (isDance && !danceTrackerRef.current)) {
       setBallOffset({ x: 0, y: 0 });
       return;
     }
@@ -317,7 +443,11 @@ export default function App() {
         rotationGamma: gyro.gamma,
       };
 
-      counterRef.current?.feed(sample);
+      if (isDance) {
+        danceTrackerRef.current?.feed(sample);
+      } else {
+        counterRef.current?.feed(sample);
+      }
     };
 
     window.addEventListener('devicemotion', handleMotionEvent);
@@ -325,37 +455,52 @@ export default function App() {
       window.removeEventListener('devicemotion', handleMotionEvent);
       setBallOffset({ x: 0, y: 0 });
     };
-  }, [permissionGranted, isActive]);
+  }, [permissionGranted, isActive, workoutType]);
 
-  const handleStartWorkout = () => {
-    if (!counterRef.current) return;
+  const handleStartWorkout = async () => {
+    const isDance = workoutType === 'dance';
+    if (isDance) {
+      if (!danceTrackerRef.current) return;
+      danceTrackerRef.current.start();
+    } else {
+      if (!counterRef.current) return;
+      counterRef.current.start();
+    }
     
     // 오디오 컨텍스트 사전 활성화
     getOrCreateAudioContext();
 
     setIsCompleted(false);
     setCount(0);
-    counterRef.current.start();
     setIsActive(true);
     playStartChime(); // Start chime sound
+    await requestWakeLock(); // 화면 꺼짐 방지 활성화
   };
 
-  const handleStopWorkout = () => {
-    if (!counterRef.current) return;
-    counterRef.current.stop();
+  const handleStopWorkout = async () => {
+    if (workoutType === 'dance') {
+      danceTrackerRef.current?.stop();
+    } else {
+      counterRef.current?.stop();
+    }
     setIsActive(false);
     setBallOffset({ x: 0, y: 0 });
+    await releaseWakeLock(); // 화면 꺼짐 방지 해제
   };
 
-  const handleReset = () => {
-    if (counterRef.current) {
-      counterRef.current.reset();
+  const handleReset = async () => {
+    if (workoutType === 'dance') {
+      danceTrackerRef.current?.reset();
+    } else {
+      counterRef.current?.reset();
     }
     setCount(0);
     setCurrentState('idle');
     setIsCompleted(false);
     setIsActive(false);
     setBallOffset({ x: 0, y: 0 });
+    setShowBlackSaver(false);
+    await releaseWakeLock(); // 화면 꺼짐 방지 해제
   };
 
   const handleTitleClick = () => {
@@ -370,6 +515,14 @@ export default function App() {
     if (targetCount === "" || targetCount < 1) {
       setTargetCount(10);
     }
+  };
+
+  // 시간 포맷팅 헬퍼 (분:초 형식)
+  const formatDuration = (ms: number): string => {
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
   // Helper for generating state tag class
@@ -394,6 +547,30 @@ export default function App() {
 
   return (
     <div className="app-container">
+      {/* 절전형 블랙 세이버 오버레이 (Pure Black, 오터치 전면 차단) */}
+      {showBlackSaver && isActive && (
+        <div 
+          className="black-saver-overlay"
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            setShowBlackSaver(false);
+            resetBlackSaverTimer();
+          }}
+          onTouchStart={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            setShowBlackSaver(false);
+            resetBlackSaverTimer();
+          }}
+        >
+          <div className="black-saver-content">
+            <p className="black-saver-title">🔋 배터리 절전 가동 중</p>
+            <p className="black-saver-desc">화면 터치 시 해제됩니다</p>
+          </div>
+        </div>
+      )}
+
       <header>
         <div 
           onClick={handleTitleClick} 
@@ -424,7 +601,13 @@ export default function App() {
         <div style={{ fontSize: '0.65rem', color: '#475569', marginTop: '0.2rem' }}>
           빌드: {__BUILD_TIME__}
         </div>
-        <p style={{ marginTop: '0.6rem' }}>주머니 속 센서 기반 {workoutType === 'squat' ? '스쿼트' : '푸시업'} 카운터</p>
+        <p style={{ marginTop: '0.6rem' }}>
+          주머니 속 센서 기반 {
+            workoutType === 'squat' ? '스쿼트' :
+            workoutType === 'pushup' ? '푸시업' :
+            workoutType === 'walk' ? '걷기' : '댄스'
+          } 카운터
+        </p>
       </header>
 
       {/* Permission Block */}
@@ -453,7 +636,7 @@ export default function App() {
 
       {permissionGranted === true && (
         <>
-          {/* Workout Type Tabs Selector (상단 상시 표출, 운동 중에는 비활성화) */}
+          {/* Workout Type Tabs Selector (4포지션 그리드 탭으로 개편) */}
           <div style={{ 
             width: '100%', 
             maxWidth: '480px', 
@@ -463,7 +646,9 @@ export default function App() {
             transition: 'all 0.3s ease'
           }}>
             <div style={{ 
-              display: 'flex', 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(2, 1fr)',
+              gap: '0.5rem',
               background: 'rgba(15, 23, 42, 0.4)', 
               backdropFilter: 'blur(8px)',
               borderRadius: '20px', 
@@ -471,52 +656,36 @@ export default function App() {
               border: '1px solid rgba(139, 92, 246, 0.15)',
               boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)'
             }}>
-              <button
-                onClick={() => setWorkoutType('squat')}
-                disabled={isActive}
-                style={{
-                  flex: 1,
-                  padding: '0.85rem',
-                  border: 'none',
-                  borderRadius: '16px',
-                  background: workoutType === 'squat' ? '#8b5cf6' : 'transparent',
-                  color: workoutType === 'squat' ? '#fff' : '#64748b',
-                  fontSize: '0.95rem',
-                  fontWeight: '700',
-                  cursor: isActive ? 'not-allowed' : 'pointer',
-                  transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.5rem',
-                  boxShadow: workoutType === 'squat' ? '0 4px 12px rgba(139, 92, 246, 0.3)' : 'none'
-                }}
-              >
-                🦵 스쿼트 (Squat)
-              </button>
-              <button
-                onClick={() => setWorkoutType('pushup')}
-                disabled={isActive}
-                style={{
-                  flex: 1,
-                  padding: '0.85rem',
-                  border: 'none',
-                  borderRadius: '16px',
-                  background: workoutType === 'pushup' ? '#8b5cf6' : 'transparent',
-                  color: workoutType === 'pushup' ? '#fff' : '#64748b',
-                  fontSize: '0.95rem',
-                  fontWeight: '700',
-                  cursor: isActive ? 'not-allowed' : 'pointer',
-                  transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.5rem',
-                  boxShadow: workoutType === 'pushup' ? '0 4px 12px rgba(139, 92, 246, 0.3)' : 'none'
-                }}
-              >
-                💪 푸시업 (Push-up)
-              </button>
+              {[
+                { id: 'squat', label: '🦵 스쿼트' },
+                { id: 'pushup', label: '💪 푸시업' },
+                { id: 'walk', label: '🚶 걷기' },
+                { id: 'dance', label: '🎵 댄스' }
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setWorkoutType(tab.id as any)}
+                  disabled={isActive}
+                  style={{
+                    padding: '0.85rem 0.5rem',
+                    border: 'none',
+                    borderRadius: '16px',
+                    background: workoutType === tab.id ? '#8b5cf6' : 'transparent',
+                    color: workoutType === tab.id ? '#fff' : '#64748b',
+                    fontSize: '0.95rem',
+                    fontWeight: '700',
+                    cursor: isActive ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.4rem',
+                    boxShadow: workoutType === tab.id ? '0 4px 12px rgba(139, 92, 246, 0.3)' : 'none'
+                  }}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
             {isActive && (
               <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.4rem', textAlign: 'center' }}>
@@ -528,63 +697,77 @@ export default function App() {
           {/* Settings before workout */}
           {!isActive && !isCompleted && (
             <div className="dashboard-card" style={{ marginBottom: '1.5rem' }}>
-              <div className="input-group" style={{ textAlign: 'center', marginBottom: '2rem' }}>
-                <label style={{ fontSize: '0.95rem', color: '#94a3b8', marginBottom: '1rem', display: 'block', fontWeight: '700' }}>
-                  목표 운동 세트 설정
-                </label>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', marginTop: '0.75rem' }}>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    min="1"
-                    max="100"
-                    value={targetCount}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val === "") {
-                        setTargetCount("");
-                      } else {
-                        const parsed = parseInt(val, 10);
-                        if (!isNaN(parsed)) {
-                          setTargetCount(Math.min(100, Math.max(1, parsed)));
+              {workoutType !== 'dance' ? (
+                <div className="input-group" style={{ textAlign: 'center', marginBottom: '2rem' }}>
+                  <label style={{ fontSize: '0.95rem', color: '#94a3b8', marginBottom: '1rem', display: 'block', fontWeight: '700' }}>
+                    목표 운동 세트 설정
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', marginTop: '0.75rem' }}>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      min="1"
+                      max="100"
+                      value={targetCount}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === "") {
+                          setTargetCount("");
+                        } else {
+                          const parsed = parseInt(val, 10);
+                          if (!isNaN(parsed)) {
+                            setTargetCount(Math.min(100, Math.max(1, parsed)));
+                          }
                         }
-                      }
-                    }}
-                    onBlur={handleBlurTargetCount}
-                    className="input-field-giant"
-                  />
-                  <span style={{ fontSize: '2rem', fontWeight: '800', color: '#64748b' }}>회</span>
+                      }}
+                      onBlur={handleBlurTargetCount}
+                      className="input-field-giant"
+                    />
+                    <span style={{ fontSize: '2rem', fontWeight: '800', color: '#64748b' }}>회</span>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="input-group" style={{ textAlign: 'center', marginBottom: '2rem' }}>
+                  <Music size={40} color="#8b5cf6" style={{ margin: '0 auto 0.75rem auto', animation: 'spin 10s linear infinite' }} />
+                  <label style={{ fontSize: '1.1rem', color: '#fff', marginBottom: '0.5rem', display: 'block', fontWeight: '700' }}>
+                    자유 댄스 모드 (Freestyle Dance)
+                  </label>
+                  <span style={{ fontSize: '0.85rem', color: '#64748b', display: 'block', margin: '0.5rem 0' }}>
+                    시간, 움직임 에너지 및 추정 칼로리를 계측합니다.
+                  </span>
+                </div>
+              )}
 
-              {/* Sensitivity Control Slider */}
-              <div className="input-group" style={{ textAlign: 'center', marginBottom: '2rem', width: '100%' }}>
-                <label style={{ fontSize: '0.95rem', color: '#94a3b8', marginBottom: '0.5rem', display: 'block', fontWeight: '700' }}>
-                  센서 민감도 설정: <span style={{ color: '#8b5cf6' }}>{sensitivity}</span> {sensitivity === 5 ? '(보통)' : sensitivity > 5 ? '(민감)' : '(둔감)'}
-                </label>
-                <input
-                  type="range"
-                  min="1"
-                  max="10"
-                  value={sensitivity}
-                  onChange={(e) => setSensitivity(parseInt(e.target.value, 10))}
-                  style={{
-                    width: '100%',
-                    accentColor: '#8b5cf6',
-                    height: '6px',
-                    borderRadius: '3px',
-                    background: 'rgba(255, 255, 255, 0.1)',
-                    outline: 'none',
-                    marginTop: '0.5rem',
-                    cursor: 'pointer'
-                  }}
-                />
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#64748b', marginTop: '0.4rem' }}>
-                  <span>둔감함 (큰 움직임)</span>
-                  <span>민감함 (작은 움직임)</span>
+              {/* Sensitivity Control Slider (댄스 모드는 민감도 불필요) */}
+              {workoutType !== 'dance' && (
+                <div className="input-group" style={{ textAlign: 'center', marginBottom: '2rem', width: '100%' }}>
+                  <label style={{ fontSize: '0.95rem', color: '#94a3b8', marginBottom: '0.5rem', display: 'block', fontWeight: '700' }}>
+                    센서 민감도 설정: <span style={{ color: '#8b5cf6' }}>{sensitivity}</span> {sensitivity === 5 ? '(보통)' : sensitivity > 5 ? '(민감)' : '(둔감)'}
+                  </label>
+                  <input
+                    type="range"
+                    min="1"
+                    max="10"
+                    value={sensitivity}
+                    onChange={(e) => setSensitivity(parseInt(e.target.value, 10))}
+                    style={{
+                      width: '100%',
+                      accentColor: '#8b5cf6',
+                      height: '6px',
+                      borderRadius: '3px',
+                      background: 'rgba(255, 255, 255, 0.1)',
+                      outline: 'none',
+                      marginTop: '0.5rem',
+                      cursor: 'pointer'
+                    }}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#64748b', marginTop: '0.4rem' }}>
+                    <span>둔감함 (큰 움직임)</span>
+                    <span>민감함 (작은 움직임)</span>
+                  </div>
                 </div>
-              </div>
+              )}
 
               <button className="btn-main start" onClick={handleStartWorkout}>
                 <Play size={20} />
@@ -597,19 +780,22 @@ export default function App() {
           {(isActive || isCompleted) && (
             <div className={`dashboard-card ${isActive ? 'active' : ''}`} style={{ marginBottom: '1.5rem' }}>
               {/* Pocket alignment guide */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: '#64748b', marginBottom: '1rem' }}>
-                <Smartphone size={14} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: '#64748b', marginBottom: '1rem', width: '100%' }}>
+                <Smartphone size={14} style={{ flexShrink: 0 }} />
                 <span>
-                  {workoutType === 'squat' 
-                    ? '우측 앞바지 주머니에 스마트폰을 고정하세요.' 
-                    : '바지 주머니에 스마트폰을 흔들림 없게 넣고, 엉덩이와 골반을 상체와 함께 낮췄다 올려야 감지가 잘 됩니다.'}
+                  {workoutType === 'squat' && '우측 앞바지 주머니에 스마트폰을 고정하세요.'}
+                  {workoutType === 'pushup' && '바지 주머니에 스마트폰을 고정하고 엉덩이를 낮췄다 올리세요.'}
+                  {workoutType === 'walk' && '스마트폰을 바지 앞주머니에 넣고 걸으세요. (10보 주기 소리 피드백)'}
+                  {workoutType === 'dance' && '스마트폰을 주머니에 넣고 자유롭게 리듬을 타며 춤추세요.'}
                 </span>
               </div>
 
-              {/* State Badge */}
-              <div className={getStatusClass(currentState)}>
-                {getStatusText(currentState)}
-              </div>
+              {/* State Badge (댄스는 불필요) */}
+              {workoutType !== 'dance' && (
+                <div className={getStatusClass(currentState)}>
+                  {getStatusText(currentState)}
+                </div>
+              )}
 
               {/* Inertia Motion Visualizer (관성 구슬 원형 UI) */}
               <div className="motion-container">
@@ -621,14 +807,64 @@ export default function App() {
                 />
               </div>
 
-              {/* Big Count Screen */}
-              <div className={`counter-display ${bump ? 'bump' : ''}`}>
-                {count}
-              </div>
-
-              <div style={{ fontSize: '0.95rem', color: '#64748b', marginBottom: '2rem' }}>
-                목표 회수: <strong style={{ color: '#fff' }}>{targetCount || 10}</strong> 회
-              </div>
+              {/* Big Count Screen / Dance metrics UI */}
+              {workoutType !== 'dance' ? (
+                <>
+                  <div className={`counter-display ${bump ? 'bump' : ''}`}>
+                    {count}
+                  </div>
+                  <div style={{ fontSize: '0.95rem', color: '#64748b', marginBottom: '2rem' }}>
+                    목표 회수: <strong style={{ color: '#fff' }}>{targetCount || 10}</strong> 회
+                  </div>
+                </>
+              ) : (
+                <div style={{ width: '100%', marginBottom: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  {/* Live Gauge */}
+                  <div className="dance-intensity-wrapper">
+                    <div className="dance-intensity-label">
+                      <span>실시간 춤 강도</span>
+                      <span style={{ color: '#d946ef' }}>{danceMetrics.intensity}%</span>
+                    </div>
+                    <div className="dance-intensity-bar-container">
+                      <div 
+                        className="dance-intensity-bar" 
+                        style={{ width: `${danceMetrics.intensity}%` }}
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* Dance Metrics Grid */}
+                  <div className="dance-metrics-grid">
+                    <div className="dance-metric-card">
+                      <div className="dance-metric-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.2rem' }}>
+                        <Clock size={12} color="#8b5cf6" />
+                        <span>춤춘 시간</span>
+                      </div>
+                      <div className="dance-metric-value">
+                        {formatDuration(danceMetrics.activeDurationMs)}
+                      </div>
+                    </div>
+                    <div className="dance-metric-card">
+                      <div className="dance-metric-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.2rem' }}>
+                        <Music size={12} color="#a78bfa" />
+                        <span>에너지 점수</span>
+                      </div>
+                      <div className="dance-metric-value">
+                        {danceMetrics.totalEnergy}
+                      </div>
+                    </div>
+                    <div className="dance-metric-card">
+                      <div className="dance-metric-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.2rem' }}>
+                        <Flame size={12} color="#ec4899" />
+                        <span>소모 칼로리</span>
+                      </div>
+                      <div className="dance-metric-value" style={{ color: '#ec4899' }}>
+                        {danceMetrics.estimatedCalories} <span style={{ fontSize: '0.65rem', color: '#64748b' }}>kcal</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Stop & Pause controls */}
               <div style={{ width: '100%', display: 'flex', gap: '1rem' }}>
@@ -670,7 +906,10 @@ export default function App() {
               <Award size={80} color="#ffd000" style={{ marginBottom: '1rem', animation: 'pulse-border 1.5s infinite' }} />
               <div className="celebration-title">세트 완료!</div>
               <p style={{ color: '#94a3b8', fontSize: '1.1rem', margin: '0 0 2rem 0' }}>
-                {workoutType === 'squat' ? '스쿼트' : '푸시업'} <strong>{targetCount || 10}회</strong> 목표를 성공적으로 완료했습니다!
+                {
+                  workoutType === 'squat' ? '스쿼트' :
+                  workoutType === 'pushup' ? '푸시업' : '걷기'
+                } <strong>{targetCount || 10}회</strong> 목표를 성공적으로 완료했습니다!
               </p>
               <div style={{ width: '100%', maxWidth: '280px' }}>
                 <button className="btn-main start" onClick={handleReset}>
@@ -745,12 +984,26 @@ export default function App() {
                   실시간 센서 디버그 데이터
                 </div>
                 <div>센서 수신 여부: <span style={{ color: debugMag !== 0 ? '#10b981' : '#f43f5e' }}>{debugMag !== 0 ? '정상 수신 중' : '대기 중 (0)'}</span></div>
-                <div>실시간 가속도 크기 (mag): <strong style={{ color: '#fff' }}>{debugMag}</strong> m/s²</div>
-                <div>LPF 필터링 가속도 (filtered): <strong style={{ color: '#8b5cf6' }}>{debugFilteredMag}</strong> m/s²</div>
-                <div>카운터 상태 (FSM State): <strong style={{ color: '#f59e0b' }}>{currentState.toUpperCase()}</strong></div>
-                <div>설정 임계값 (Threshold): <strong>{thresholdVal}</strong> (민감도: {sensitivity})</div>
+                {workoutType !== 'dance' ? (
+                  <>
+                    <div>실시간 가속도 크기 (mag): <strong style={{ color: '#fff' }}>{debugMag}</strong> m/s²</div>
+                    <div>LPF 필터링 가속도 (filtered): <strong style={{ color: '#8b5cf6' }}>{debugFilteredMag}</strong> m/s²</div>
+                    <div>카운터 상태 (FSM State): <strong style={{ color: '#f59e0b' }}>{currentState.toUpperCase()}</strong></div>
+                    <div>설정 임계값 (Threshold): <strong>{thresholdVal}</strong> (민감도: {sensitivity})</div>
+                  </>
+                ) : (
+                  <>
+                    <div>춤 실시간 움직임 강도: <strong style={{ color: '#d946ef' }}>{danceMetrics.intensity}</strong> %</div>
+                    <div>누적 모션 에너지: <strong>{danceMetrics.totalEnergy}</strong></div>
+                    <div>누적 소모 칼로리: <strong>{danceMetrics.estimatedCalories}</strong> kcal</div>
+                    <div>누적 춤 시간: <strong>{formatDuration(danceMetrics.activeDurationMs)}</strong></div>
+                  </>
+                )}
                 <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '0.25rem' }}>
-                  ※ {workoutType === 'squat' ? '스쿼트' : '푸시업'} 카운트 원리: 하강 시 가속도가 {Number((9.8 - thresholdVal).toFixed(2))} 이하로 감소하고, 최저점에서 회복된 후, 상승 시 {Number((9.8 + thresholdVal).toFixed(2))} 이상으로 가속도가 치솟아야 1회가 인정됩니다.
+                  {workoutType === 'dance' 
+                    ? '※ 댄스 트래커 작동 원리: 주머니 속 기기의 선형 가속도 변화량이 0.4 m/s²을 초과할 때 춤춘 시간이 누적되며, 선형 가속도 적분값으로 에너지를 누적 계산합니다.' 
+                    : `※ ${workoutType === 'squat' ? '스쿼트' : workoutType === 'pushup' ? '푸시업' : '걷기'} 카운트 원리: 하강 시 가속도가 ${Number((9.8 - thresholdVal).toFixed(2))} 이하로 감소하고, 최저점에서 회복된 후, 상승 시 ${Number((9.8 + thresholdVal).toFixed(2))} 이상으로 가속도가 치솟아야 1회가 인정됩니다.`
+                  }
                 </div>
               </div>
             )}

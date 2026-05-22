@@ -437,3 +437,105 @@ header p {
     transform: rotate(360deg);
   }
 }
+
+/* Black Saver Overlay (절전 화면) */
+.black-saver-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: #000000;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  animation: fade-in 0.4s ease-out;
+}
+
+.black-saver-content {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.15); /* OLED 번인 방지를 위한 매우 어두운 회색조 */
+  font-family: 'Inter', sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  pointer-events: none;
+}
+
+.black-saver-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  margin: 0;
+}
+
+.black-saver-desc {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.08);
+  margin: 0;
+}
+
+/* Dance Mode CSS */
+.dance-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  width: 100%;
+  margin-top: 1rem;
+}
+
+.dance-metric-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 14px;
+  padding: 0.75rem 0.5rem;
+  text-align: center;
+}
+
+.dance-metric-label {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin-bottom: 0.25rem;
+}
+
+.dance-metric-value {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.dance-intensity-wrapper {
+  width: 100%;
+  margin-top: 1.25rem;
+  text-align: left;
+}
+
+.dance-intensity-label {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  margin-bottom: 0.4rem;
+  display: flex;
+  justify-content: space-between;
+  font-weight: 600;
+}
+
+.dance-intensity-bar-container {
+  width: 100%;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.dance-intensity-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #8b5cf6 0%, #d946ef 50%, #ec4899 100%);
+  border-radius: 6px;
+  transition: width 0.1s ease;
+  box-shadow: 0 0 10px rgba(217, 70, 239, 0.5);
+}
+
