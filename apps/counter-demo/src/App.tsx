@@ -18,6 +18,7 @@ export default function App() {
   const [bump, setBump] = useState(false);
   const [ballOffset, setBallOffset] = useState({ x: 0, y: 0 });
   const [showAudioTip, setShowAudioTip] = useState(false);
+  const [isReloading, setIsReloading] = useState(false);
 
   const counterRef = useRef<SquatCounter | null>(null);
 
@@ -253,8 +254,8 @@ export default function App() {
       const linearX = linear.x || 0;
       const linearY = linear.y || 0;
       
-      const rawX = -linearX * 16;
-      const rawY = linearY * 16;
+      const rawX = -linearX * 45;
+      const rawY = linearY * 45;
       const distance = Math.sqrt(rawX * rawX + rawY * rawY);
       const maxRadius = 48; // 원의 내측 한계 기하 반경 (반지름 60px - 구슬 반지름 12px)
 
@@ -322,6 +323,14 @@ export default function App() {
     setBallOffset({ x: 0, y: 0 });
   };
 
+  const handleTitleClick = () => {
+    if (isReloading) return;
+    setIsReloading(true);
+    setTimeout(() => {
+      window.location.reload();
+    }, 600);
+  };
+
   const handleBlurTargetCount = () => {
     if (targetCount === "" || targetCount < 1) {
       setTargetCount(10);
@@ -351,7 +360,28 @@ export default function App() {
   return (
     <div className="app-container">
       <header>
-        <h1 onClick={() => window.location.reload()} title="새로고침">POCKET MOTION</h1>
+        <div 
+          onClick={handleTitleClick} 
+          title="새로고침"
+          style={{ 
+            display: 'inline-flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            gap: '0.6rem', 
+            cursor: 'pointer',
+            margin: '0 auto'
+          }}
+          className="title-container"
+        >
+          <h1 style={{ margin: 0 }}>POCKET MOTION</h1>
+          {isReloading && (
+            <RefreshCw 
+              size={24} 
+              color="#8b5cf6" 
+              className="spinning-icon" 
+            />
+          )}
+        </div>
         <div style={{ fontSize: '0.85rem', color: '#8b5cf6', marginTop: '0.4rem', letterSpacing: '0.05em', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem' }}>
           <span>🚀</span>
           <span>v{__APP_VERSION__}</span>
