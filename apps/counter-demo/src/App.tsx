@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Play, Square, RefreshCw, Trophy, ShieldAlert, Award, Smartphone, VolumeX, ChevronDown, ChevronUp, Music, Flame, Clock, X } from 'lucide-react';
+import { Play, Square, RefreshCw, Trophy, ShieldAlert, Award, Smartphone, ChevronDown, ChevronUp, Music, Flame, Clock, X } from 'lucide-react';
 import { SquatCounter, DanceTracker, DanceMetrics } from '@pocket-motion/core';
 import { MotionSample, CounterState, WorkoutRecord } from '@pocket-motion/types';
 
@@ -17,11 +17,7 @@ export default function App() {
   const [isCompleted, setIsCompleted] = useState(false);
   const [bump, setBump] = useState(false);
   const [ballOffset, setBallOffset] = useState({ x: 0, y: 0 });
-  const [showAudioTip, setShowAudioTip] = useState(false);
   const [isReloading, setIsReloading] = useState(false);
-  const [showDebug, setShowDebug] = useState(false);
-  const [debugMag, setDebugMag] = useState(0);
-  const [debugFilteredMag, setDebugFilteredMag] = useState(9.8);
   const [workoutType, setWorkoutType] = useState<'squat' | 'pushup' | 'walk' | 'dance'>('squat');
 
   // 운동 히스토리 기록 관련 상태 및 레프
@@ -637,11 +633,6 @@ export default function App() {
 
       squatCounter.onComplete(() => {
         // 내부 complete 이벤트는 무시하고 handleSetCompleted()로 이원화합니다.
-      });
-
-      squatCounter.onDebug((data) => {
-        setDebugMag(Number(data.magnitude.toFixed(3)));
-        setDebugFilteredMag(Number(data.filteredMagnitude.toFixed(3)));
       });
 
       counterRef.current = squatCounter;
@@ -1490,17 +1481,30 @@ export default function App() {
                             {count}
                           </div>
                           <div style={{ fontSize: '0.95rem', color: '#64748b', marginBottom: '2rem' }}>
-                            목표 회수: <strong style={{ color: '#fff' }}>{targetCount || 10}</strong> 회
+                            {workoutType === 'walk' ? '목표 걸음 수' : '목표 횟수'}: <strong style={{ color: '#fff' }}>{targetCount || 10}</strong> {workoutType === 'walk' ? '걸음' : '회'}
                           </div>
                         </>
                       ) : (
                         <>
-                          <div className="counter-display" style={{ color: '#38bdf8', fontFamily: 'monospace' }}>
-                            {timeRemaining}s
-                          </div>
-                          <div style={{ fontSize: '0.95rem', color: '#64748b', marginBottom: '2rem' }}>
-                            현재 수행 횟수: <strong style={{ color: '#fff' }}>{count}</strong> 회 / 세트 시간: {workDuration}초
-                          </div>
+                          {workoutType === 'walk' ? (
+                            <>
+                              <div className={`counter-display ${bump ? 'bump' : ''}`} style={{ color: '#38bdf8' }}>
+                                {count}
+                              </div>
+                              <div style={{ fontSize: '0.95rem', color: '#64748b', marginBottom: '2rem' }}>
+                                남은 시간: <strong style={{ color: '#fff' }}>{timeRemaining}</strong>초 / 세트 시간: {workDuration}초
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="counter-display" style={{ color: '#38bdf8', fontFamily: 'monospace' }}>
+                                {timeRemaining}s
+                              </div>
+                              <div style={{ fontSize: '0.95rem', color: '#64748b', marginBottom: '2rem' }}>
+                                현재 수행 횟수: <strong style={{ color: '#fff' }}>{count}</strong> 회 / 세트 시간: {workDuration}초
+                              </div>
+                            </>
+                          )}
                         </>
                       )}
                     </>
@@ -1612,94 +1616,7 @@ export default function App() {
             </div>
           )}
 
-          {/* Audio Troubleshooter Guide (소리가 나지 않나요?) */}
-          <div className="audio-guide-wrapper">
-            <button 
-              className={`audio-guide-toggle ${showAudioTip ? 'active' : ''}`}
-              onClick={() => setShowAudioTip(!showAudioTip)}
-            >
-              <VolumeX size={16} />
-              <span>소리가 나지 않나요?</span>
-              {showAudioTip ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-            </button>
-            
-            {showAudioTip && (
-              <div className="audio-guide-content">
-                <div className="audio-tip-item">
-                  <strong>1. 아이폰(iOS) 물리 무음 스위치 확인</strong>
-                  <p>아이폰 측면의 물리 무음(진동) 스위치가 켜져(주황색이 보이게 내려져) 있으면 효과음이 재생되지 않습니다. 스위치를 위로 올려 <strong>벨소리 모드</strong>로 전환해 주세요.</p>
-                </div>
-                <div className="audio-tip-item">
-                  <strong>2. 첫 터치(클릭) 상호작용 필수</strong>
-                  <p>모바일 브라우저 보안 규정 상, 페이지 로드 후 사용자의 터치 입력이 없으면 소리 재생이 차단됩니다. 반드시 <strong>'운동 시작하기'</strong> 버튼 등을 직접 클릭하여 시작해 주세요.</p>
-                </div>
-                <div className="audio-tip-item">
-                  <strong>3. 기기 미디어 볼륨 확인</strong>
-                  <p>스마트폰의 미디어 음량이 음소거 또는 너무 낮게 설정되어 있는지 확인하고 볼륨을 키워 주세요.</p>
-                </div>
-              </div>
-            )}
-          </div>
 
-          {/* Debug Toggle & Panel */}
-          <div style={{ marginTop: '1.5rem', width: '100%', maxWidth: '480px', textAlign: 'center' }}>
-            <button
-              onClick={() => setShowDebug(!showDebug)}
-              style={{
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                padding: '0.4rem 0.8rem',
-                borderRadius: '8px',
-                color: '#64748b',
-                fontSize: '0.75rem',
-                cursor: 'pointer',
-                transition: 'all 0.2s'
-              }}
-            >
-              {showDebug ? '⚙️ 디버그 패널 닫기' : '⚙️ 개발자 디버그 패널 열기'}
-            </button>
-
-            {showDebug && (
-              <div style={{
-                background: 'rgba(15, 23, 42, 0.65)',
-                border: '1px solid rgba(139, 92, 246, 0.2)',
-                borderRadius: '12px',
-                padding: '1rem',
-                marginTop: '0.5rem',
-                textAlign: 'left',
-                fontSize: '0.8rem',
-                color: '#94a3b8',
-                lineHeight: '1.6',
-                fontFamily: 'monospace'
-              }}>
-                <div style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '0.25rem', marginBottom: '0.25rem', color: '#c084fc', fontWeight: 'bold' }}>
-                  실시간 센서 디버그 데이터
-                </div>
-                <div>센서 수신 여부: <span style={{ color: debugMag !== 0 ? '#10b981' : '#f43f5e' }}>{debugMag !== 0 ? '정상 수신 중' : '대기 중 (0)'}</span></div>
-                {workoutType !== 'dance' ? (
-                  <>
-                    <div>실시간 가속도 크기 (mag): <strong style={{ color: '#fff' }}>{debugMag}</strong> m/s²</div>
-                    <div>LPF 필터링 가속도 (filtered): <strong style={{ color: '#8b5cf6' }}>{debugFilteredMag}</strong> m/s²</div>
-                    <div>카운터 상태 (FSM State): <strong style={{ color: '#f59e0b' }}>{currentState.toUpperCase()}</strong></div>
-                    <div>설정 임계값 (Threshold): <strong>{thresholdVal}</strong> (민감도: {sensitivity})</div>
-                  </>
-                ) : (
-                  <>
-                    <div>춤 실시간 움직임 강도: <strong style={{ color: '#d946ef' }}>{danceMetrics.intensity}</strong> %</div>
-                    <div>누적 모션 에너지: <strong>{danceMetrics.totalEnergy}</strong></div>
-                    <div>누적 소모 칼로리: <strong>{danceMetrics.estimatedCalories}</strong> kcal</div>
-                    <div>누적 춤 시간: <strong>{formatDuration(danceMetrics.activeDurationMs)}</strong></div>
-                  </>
-                )}
-                <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '0.25rem' }}>
-                  {workoutType === 'dance' 
-                    ? '※ 댄스 트래커 작동 원리: 주머니 속 기기의 선형 가속도 변화량이 0.4 m/s²을 초과할 때 춤춘 시간이 누적되며, 선형 가속도 적분값으로 에너지를 누적 계산합니다.' 
-                    : `※ ${workoutType === 'squat' ? '스쿼트' : workoutType === 'pushup' ? '푸시업' : '걷기'} 카운트 원리: 하강 시 가속도가 ${Number((9.8 - thresholdVal).toFixed(2))} 이하로 감소하고, 최저점에서 회복된 후, 상승 시 ${Number((9.8 + thresholdVal).toFixed(2))} 이상으로 가속도가 치솟아야 1회가 인정됩니다.`
-                  }
-                </div>
-              </div>
-            )}
-          </div>
         </>
       )}
 
