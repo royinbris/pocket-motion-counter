@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Play, Square, RefreshCw, Trophy, ShieldAlert, Award, Smartphone } from 'lucide-react';
+import { Play, Square, RefreshCw, Trophy, ShieldAlert, Award, Smartphone, VolumeX, ChevronDown, ChevronUp } from 'lucide-react';
 import { SquatCounter } from '@pocket-motion/core';
 import { MotionSample, CounterState } from '@pocket-motion/types';
 
@@ -16,6 +16,8 @@ export default function App() {
   const [sensitivity, setSensitivity] = useState<number>(5);
   const [isCompleted, setIsCompleted] = useState(false);
   const [bump, setBump] = useState(false);
+  const [ballOffset, setBallOffset] = useState({ x: 0, y: 0 });
+  const [showAudioTip, setShowAudioTip] = useState(false);
 
   const counterRef = useRef<SquatCounter | null>(null);
 
@@ -237,12 +239,34 @@ export default function App() {
 
   // Motion event router
   useEffect(() => {
-    if (!permissionGranted || !isActive || !counterRef.current) return;
+    if (!permissionGranted || !isActive || !counterRef.current) {
+      setBallOffset({ x: 0, y: 0 });
+      return;
+    }
 
     const handleMotionEvent = (event: DeviceMotionEvent) => {
       const accel = event.accelerationIncludingGravity || { x: 0, y: 0, z: 0 };
       const linear = event.acceleration || { x: null, y: null, z: null };
       const gyro = event.rotationRate || { alpha: null, beta: null, gamma: null };
+
+      // 가속도 센서값 기반으로 구슬 물리 오프셋 계산 (움직임 반대 관성 방향)
+      const linearX = linear.x || 0;
+      const linearY = linear.y || 0;
+      
+      const rawX = -linearX * 16;
+      const rawY = linearY * 16;
+      const distance = Math.sqrt(rawX * rawX + rawY * rawY);
+      const maxRadius = 48; // 원의 내측 한계 기하 반경 (반지름 60px - 구슬 반지름 12px)
+
+      let targetX = rawX;
+      let targetY = rawY;
+
+      if (distance > maxRadius) {
+        targetX = rawX * (maxRadius / distance);
+        targetY = rawY * (maxRadius / distance);
+      }
+
+      setBallOffset({ x: targetX, y: targetY });
 
       const sample: MotionSample = {
         timestamp: Date.now(),
@@ -263,6 +287,7 @@ export default function App() {
     window.addEventListener('devicemotion', handleMotionEvent);
     return () => {
       window.removeEventListener('devicemotion', handleMotionEvent);
+      setBallOffset({ x: 0, y: 0 });
     };
   }, [permissionGranted, isActive]);
 
@@ -283,6 +308,7 @@ export default function App() {
     if (!counterRef.current) return;
     counterRef.current.stop();
     setIsActive(false);
+    setBallOffset({ x: 0, y: 0 });
   };
 
   const handleReset = () => {
@@ -293,6 +319,7 @@ export default function App() {
     setCurrentState('idle');
     setIsCompleted(false);
     setIsActive(false);
+    setBallOffset({ x: 0, y: 0 });
   };
 
   const handleBlurTargetCount = () => {
@@ -443,6 +470,16 @@ export default function App() {
                 {getStatusText(currentState)}
               </div>
 
+              {/* Inertia Motion Visualizer (관성 구슬 원형 UI) */}
+              <div className="motion-container">
+                <div 
+                  className="motion-ball" 
+                  style={{ 
+                    transform: `translate3d(${ballOffset.x}px, ${ballOffset.y}px, 0)` 
+                  }} 
+                />
+              </div>
+
               {/* Big Count Screen */}
               <div className={`counter-display ${bump ? 'bump' : ''}`}>
                 {count}
@@ -502,6 +539,35 @@ export default function App() {
               </div>
             </div>
           )}
+
+          {/* Audio Troubleshooter Guide (소리가 나지 않나요?) */}
+          <div className="audio-guide-wrapper">
+            <button 
+              className={`audio-guide-toggle ${showAudioTip ? 'active' : ''}`}
+              onClick={() => setShowAudioTip(!showAudioTip)}
+            >
+              <VolumeX size={16} />
+              <span>소리가 나지 않나요?</span>
+              {showAudioTip ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </button>
+            
+            {showAudioTip && (
+              <div className="audio-guide-content">
+                <div className="audio-tip-item">
+                  <strong>1. 아이폰(iOS) 물리 무음 스위치 확인</strong>
+                  <p>아이폰 측면의 물리 무음(진동) 스위치가 켜져(주황색이 보이게 내려져) 있으면 효과음이 재생되지 않습니다. 스위치를 위로 올려 <strong>벨소리 모드</strong>로 전환해 주세요.</p>
+                </div>
+                <div className="audio-tip-item">
+                  <strong>2. 첫 터치(클릭) 상호작용 필수</strong>
+                  <p>모바일 브라우저 보안 규정 상, 페이지 로드 후 사용자의 터치 입력이 없으면 소리 재생이 차단됩니다. 반드시 <strong>'운동 시작하기'</strong> 버튼 등을 직접 클릭하여 시작해 주세요.</p>
+                </div>
+                <div className="audio-tip-item">
+                  <strong>3. 기기 미디어 볼륨 확인</strong>
+                  <p>스마트폰의 미디어 음량이 음소거 또는 너무 낮게 설정되어 있는지 확인하고 볼륨을 키워 주세요.</p>
+                </div>
+              </div>
+            )}
+          </div>
         </>
       )}
 
