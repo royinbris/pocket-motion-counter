@@ -327,7 +327,7 @@ export default function App() {
         <h1>POCKET MOTION</h1>
         <div style={{ fontSize: '0.85rem', color: '#8b5cf6', marginTop: '0.4rem', letterSpacing: '0.05em', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem' }}>
           <span>🚀</span>
-          <span>v1.0.2 ({__APP_VERSION__})</span>
+          <span>v{__APP_VERSION__}</span>
         </div>
         <div style={{ fontSize: '0.65rem', color: '#475569', marginTop: '0.2rem' }}>
           빌드: {__BUILD_TIME__}
@@ -506,9 +506,9 @@ export default function App() {
       )}
 
       <footer style={{ textAlign: 'center', fontSize: '0.75rem', color: '#475569', marginTop: 'auto', paddingTop: '2rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-        <div>Pocket Motion Counter Demo v1.0.2</div>
+        <div>Pocket Motion Counter Demo v{__APP_VERSION__}</div>
         <div style={{ color: '#334155', fontSize: '0.65rem' }}>
-          배포 버전: {__APP_VERSION__} ({__BUILD_TIME__})
+          배포 버전: v{__APP_VERSION__} ({__BUILD_TIME__})
         </div>
       </footer>
     </div>
