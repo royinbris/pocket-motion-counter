@@ -453,54 +453,81 @@ export default function App() {
 
       {permissionGranted === true && (
         <>
+          {/* Workout Type Tabs Selector (상단 상시 표출, 운동 중에는 비활성화) */}
+          <div style={{ 
+            width: '100%', 
+            maxWidth: '480px', 
+            margin: '0 auto 1.5rem auto',
+            opacity: isActive ? 0.6 : 1,
+            pointerEvents: isActive ? 'none' : 'auto',
+            transition: 'all 0.3s ease'
+          }}>
+            <div style={{ 
+              display: 'flex', 
+              background: 'rgba(15, 23, 42, 0.4)', 
+              backdropFilter: 'blur(8px)',
+              borderRadius: '20px', 
+              padding: '0.4rem', 
+              border: '1px solid rgba(139, 92, 246, 0.15)',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)'
+            }}>
+              <button
+                onClick={() => setWorkoutType('squat')}
+                disabled={isActive}
+                style={{
+                  flex: 1,
+                  padding: '0.85rem',
+                  border: 'none',
+                  borderRadius: '16px',
+                  background: workoutType === 'squat' ? '#8b5cf6' : 'transparent',
+                  color: workoutType === 'squat' ? '#fff' : '#64748b',
+                  fontSize: '0.95rem',
+                  fontWeight: '700',
+                  cursor: isActive ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                  boxShadow: workoutType === 'squat' ? '0 4px 12px rgba(139, 92, 246, 0.3)' : 'none'
+                }}
+              >
+                🦵 스쿼트 (Squat)
+              </button>
+              <button
+                onClick={() => setWorkoutType('pushup')}
+                disabled={isActive}
+                style={{
+                  flex: 1,
+                  padding: '0.85rem',
+                  border: 'none',
+                  borderRadius: '16px',
+                  background: workoutType === 'pushup' ? '#8b5cf6' : 'transparent',
+                  color: workoutType === 'pushup' ? '#fff' : '#64748b',
+                  fontSize: '0.95rem',
+                  fontWeight: '700',
+                  cursor: isActive ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                  boxShadow: workoutType === 'pushup' ? '0 4px 12px rgba(139, 92, 246, 0.3)' : 'none'
+                }}
+              >
+                💪 푸시업 (Push-up)
+              </button>
+            </div>
+            {isActive && (
+              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.4rem', textAlign: 'center' }}>
+                🔒 운동 진행 중에는 종목을 변경할 수 없습니다.
+              </div>
+            )}
+          </div>
+
           {/* Settings before workout */}
           {!isActive && !isCompleted && (
             <div className="dashboard-card" style={{ marginBottom: '1.5rem' }}>
-              {/* Workout Type Tabs Selector */}
-              <div style={{ display: 'flex', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '16px', padding: '0.35rem', border: '1px solid rgba(255, 255, 255, 0.05)', marginBottom: '1.5rem' }}>
-                <button
-                  onClick={() => setWorkoutType('squat')}
-                  style={{
-                    flex: 1,
-                    padding: '0.75rem',
-                    border: 'none',
-                    borderRadius: '12px',
-                    background: workoutType === 'squat' ? '#8b5cf6' : 'transparent',
-                    color: workoutType === 'squat' ? '#fff' : '#64748b',
-                    fontSize: '0.9rem',
-                    fontWeight: '700',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.4rem'
-                  }}
-                >
-                  🦵 스쿼트
-                </button>
-                <button
-                  onClick={() => setWorkoutType('pushup')}
-                  style={{
-                    flex: 1,
-                    padding: '0.75rem',
-                    border: 'none',
-                    borderRadius: '12px',
-                    background: workoutType === 'pushup' ? '#8b5cf6' : 'transparent',
-                    color: workoutType === 'pushup' ? '#fff' : '#64748b',
-                    fontSize: '0.9rem',
-                    fontWeight: '700',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.4rem'
-                  }}
-                >
-                  💪 푸시업
-                </button>
-              </div>
               <div className="input-group" style={{ textAlign: 'center', marginBottom: '2rem' }}>
                 <label style={{ fontSize: '0.95rem', color: '#94a3b8', marginBottom: '1rem', display: 'block', fontWeight: '700' }}>
                   목표 운동 세트 설정
