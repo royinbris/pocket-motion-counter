@@ -91,7 +91,7 @@ export class SquatCounter implements IMotionCounter {
 
       case 'descending':
         // Transition to Valley when acceleration returns close to gravity or rises (releasing downward speed)
-        if (mag >= gravity - 0.2) {
+        if (mag >= gravity - (this.config.thresholdDown * 0.25)) {
           this.changeState('valley', now);
         }
         break;
@@ -109,7 +109,7 @@ export class SquatCounter implements IMotionCounter {
 
       case 'ascending':
         // Return to Idle when acceleration stabilizes back around normal gravity range
-        if (mag <= gravity + 0.3) {
+        if (mag <= gravity + (this.config.thresholdUp * 0.25)) {
           const repDuration = now - this.repStartTime;
 
           // Validate rep duration

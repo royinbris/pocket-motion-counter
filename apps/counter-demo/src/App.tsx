@@ -22,6 +22,7 @@ export default function App() {
   const [showDebug, setShowDebug] = useState(false);
   const [debugMag, setDebugMag] = useState(0);
   const [debugFilteredMag, setDebugFilteredMag] = useState(9.8);
+  const [workoutType, setWorkoutType] = useState<'squat' | 'pushup'>('squat');
 
   const counterRef = useRef<SquatCounter | null>(null);
 
@@ -200,15 +201,20 @@ export default function App() {
     }
   }, []);
 
+  // 임계값 매핑 (스쿼트는 1.8~0.6, 푸시업은 0.6~0.12의 매우 예민하고 좁은 가속도 폭 적용)
+  const isPushUp = workoutType === 'pushup';
+  const minThreshold = isPushUp ? 0.6 : 1.8;
+  const maxThreshold = isPushUp ? 0.12 : 0.6;
+  const thresholdVal = Number((minThreshold - (sensitivity - 1) * ((minThreshold - maxThreshold) / 9)).toFixed(2));
+
   // Initialize Motion Engine
   useEffect(() => {
-    // 민감도 수식 튜닝: 1(둔감)일 때 1.8, 5(보통)일 때 1.2, 10(민감)일 때 0.6으로 정밀 맵핑
-    const thresholdVal = Number((1.8 - (sensitivity - 1) * (1.2 / 9)).toFixed(2));
     const squatCounter = new SquatCounter({
       targetCount: targetCount === "" ? 10 : targetCount,
       thresholdDown: thresholdVal,
       thresholdUp: thresholdVal,
-      minRepDurationMs: 1200 // 스쿼트 1회 최소 소요 시간 1.2초 보장
+      minRepDurationMs: isPushUp ? 800 : 1200, // 푸시업은 최소 0.8초, 스쿼트는 1.2초 보장
+      lpfAlpha: isPushUp ? 0.25 : 0.15 // 푸시업은 신호 지연 최소화를 위해 필터 계수 상향
     });
 
     // Subscribe to events
@@ -245,7 +251,7 @@ export default function App() {
     return () => {
       squatCounter.stop();
     };
-  }, [targetCount, sensitivity]);
+  }, [targetCount, sensitivity, workoutType]);
 
   // Motion event router
   useEffect(() => {
@@ -418,7 +424,7 @@ export default function App() {
         <div style={{ fontSize: '0.65rem', color: '#475569', marginTop: '0.2rem' }}>
           빌드: {__BUILD_TIME__}
         </div>
-        <p style={{ marginTop: '0.6rem' }}>주머니 속 센서 기반 스쿼트 카운터</p>
+        <p style={{ marginTop: '0.6rem' }}>주머니 속 센서 기반 {workoutType === 'squat' ? '스쿼트' : '푸시업'} 카운터</p>
       </header>
 
       {/* Permission Block */}
@@ -450,6 +456,51 @@ export default function App() {
           {/* Settings before workout */}
           {!isActive && !isCompleted && (
             <div className="dashboard-card" style={{ marginBottom: '1.5rem' }}>
+              {/* Workout Type Tabs Selector */}
+              <div style={{ display: 'flex', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '16px', padding: '0.35rem', border: '1px solid rgba(255, 255, 255, 0.05)', marginBottom: '1.5rem' }}>
+                <button
+                  onClick={() => setWorkoutType('squat')}
+                  style={{
+                    flex: 1,
+                    padding: '0.75rem',
+                    border: 'none',
+                    borderRadius: '12px',
+                    background: workoutType === 'squat' ? '#8b5cf6' : 'transparent',
+                    color: workoutType === 'squat' ? '#fff' : '#64748b',
+                    fontSize: '0.9rem',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.4rem'
+                  }}
+                >
+                  🦵 스쿼트
+                </button>
+                <button
+                  onClick={() => setWorkoutType('pushup')}
+                  style={{
+                    flex: 1,
+                    padding: '0.75rem',
+                    border: 'none',
+                    borderRadius: '12px',
+                    background: workoutType === 'pushup' ? '#8b5cf6' : 'transparent',
+                    color: workoutType === 'pushup' ? '#fff' : '#64748b',
+                    fontSize: '0.9rem',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.4rem'
+                  }}
+                >
+                  💪 푸시업
+                </button>
+              </div>
               <div className="input-group" style={{ textAlign: 'center', marginBottom: '2rem' }}>
                 <label style={{ fontSize: '0.95rem', color: '#94a3b8', marginBottom: '1rem', display: 'block', fontWeight: '700' }}>
                   목표 운동 세트 설정
@@ -521,7 +572,11 @@ export default function App() {
               {/* Pocket alignment guide */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: '#64748b', marginBottom: '1rem' }}>
                 <Smartphone size={14} />
-                <span>우측 앞바지 주머니에 스마트폰을 고정하세요.</span>
+                <span>
+                  {workoutType === 'squat' 
+                    ? '우측 앞바지 주머니에 스마트폰을 고정하세요.' 
+                    : '바지 주머니에 스마트폰을 흔들림 없게 넣고, 엉덩이와 골반을 상체와 함께 낮췄다 올려야 감지가 잘 됩니다.'}
+                </span>
               </div>
 
               {/* State Badge */}
@@ -588,7 +643,7 @@ export default function App() {
               <Award size={80} color="#ffd000" style={{ marginBottom: '1rem', animation: 'pulse-border 1.5s infinite' }} />
               <div className="celebration-title">세트 완료!</div>
               <p style={{ color: '#94a3b8', fontSize: '1.1rem', margin: '0 0 2rem 0' }}>
-                스쿼트 <strong>{targetCount || 10}회</strong> 목표를 성공적으로 완료했습니다!
+                {workoutType === 'squat' ? '스쿼트' : '푸시업'} <strong>{targetCount || 10}회</strong> 목표를 성공적으로 완료했습니다!
               </p>
               <div style={{ width: '100%', maxWidth: '280px' }}>
                 <button className="btn-main start" onClick={handleReset}>
@@ -666,9 +721,9 @@ export default function App() {
                 <div>실시간 가속도 크기 (mag): <strong style={{ color: '#fff' }}>{debugMag}</strong> m/s²</div>
                 <div>LPF 필터링 가속도 (filtered): <strong style={{ color: '#8b5cf6' }}>{debugFilteredMag}</strong> m/s²</div>
                 <div>카운터 상태 (FSM State): <strong style={{ color: '#f59e0b' }}>{currentState.toUpperCase()}</strong></div>
-                <div>설정 임계값 (Threshold): <strong>{Number((1.8 - (sensitivity - 1) * (1.2 / 9)).toFixed(2))}</strong> (민감도: {sensitivity})</div>
+                <div>설정 임계값 (Threshold): <strong>{thresholdVal}</strong> (민감도: {sensitivity})</div>
                 <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '0.25rem' }}>
-                  ※ 스쿼트 카운트 원리: 하강 시 가속도가 {Number((9.8 - (1.8 - (sensitivity - 1) * (1.2 / 9))).toFixed(2))} 이하로 감소하고, 최저점에서 회복된 후, 상승 시 {Number((9.8 + (1.8 - (sensitivity - 1) * (1.2 / 9))).toFixed(2))} 이상으로 가속도가 치솟아야 1회가 인정됩니다.
+                  ※ {workoutType === 'squat' ? '스쿼트' : '푸시업'} 카운트 원리: 하강 시 가속도가 {Number((9.8 - thresholdVal).toFixed(2))} 이하로 감소하고, 최저점에서 회복된 후, 상승 시 {Number((9.8 + thresholdVal).toFixed(2))} 이상으로 가속도가 치솟아야 1회가 인정됩니다.
                 </div>
               </div>
             )}
