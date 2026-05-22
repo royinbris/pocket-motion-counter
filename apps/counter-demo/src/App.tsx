@@ -12,7 +12,7 @@ export default function App() {
   const [isActive, setIsActive] = useState(false);
   const [count, setCount] = useState(0);
   const [currentState, setCurrentState] = useState<CounterState>('idle');
-  const [targetCount, setTargetCount] = useState(10);
+  const [targetCount, setTargetCount] = useState<number | "">(10);
   const [isCompleted, setIsCompleted] = useState(false);
   const [bump, setBump] = useState(false);
 
@@ -196,7 +196,7 @@ export default function App() {
   // Initialize Motion Engine
   useEffect(() => {
     const squatCounter = new SquatCounter({
-      targetCount: targetCount,
+      targetCount: targetCount === "" ? 10 : targetCount,
       minRepDurationMs: 1200 // 스쿼트 1회 최소 소요 시간 1.2초 보장
     });
 
@@ -291,6 +291,12 @@ export default function App() {
     setIsActive(false);
   };
 
+  const handleBlurTargetCount = () => {
+    if (targetCount === "" || targetCount < 1) {
+      setTargetCount(10);
+    }
+  };
+
   // Helper for generating state tag class
   const getStatusClass = (state: CounterState) => {
     switch (state) {
@@ -366,7 +372,18 @@ export default function App() {
                     min="1"
                     max="100"
                     value={targetCount}
-                    onChange={(e) => setTargetCount(Math.max(1, parseInt(e.target.value) || 1))}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === "") {
+                        setTargetCount("");
+                      } else {
+                        const parsed = parseInt(val, 10);
+                        if (!isNaN(parsed)) {
+                          setTargetCount(Math.min(100, Math.max(1, parsed)));
+                        }
+                      }
+                    }}
+                    onBlur={handleBlurTargetCount}
                     className="input-field-giant"
                   />
                   <span style={{ fontSize: '2rem', fontWeight: '800', color: '#64748b' }}>회</span>
@@ -399,7 +416,7 @@ export default function App() {
               </div>
 
               <div style={{ fontSize: '0.95rem', color: '#64748b', marginBottom: '2rem' }}>
-                목표 회수: <strong style={{ color: '#fff' }}>{targetCount}</strong> 회
+                목표 회수: <strong style={{ color: '#fff' }}>{targetCount || 10}</strong> 회
               </div>
 
               {/* Stop & Pause controls */}
@@ -442,7 +459,7 @@ export default function App() {
               <Award size={80} color="#ffd000" style={{ marginBottom: '1rem', animation: 'pulse-border 1.5s infinite' }} />
               <div className="celebration-title">세트 완료!</div>
               <p style={{ color: '#94a3b8', fontSize: '1.1rem', margin: '0 0 2rem 0' }}>
-                스쿼트 <strong>{targetCount}회</strong> 목표를 성공적으로 완료했습니다!
+                스쿼트 <strong>{targetCount || 10}회</strong> 목표를 성공적으로 완료했습니다!
               </p>
               <div style={{ width: '100%', maxWidth: '280px' }}>
                 <button className="btn-main start" onClick={handleReset}>
