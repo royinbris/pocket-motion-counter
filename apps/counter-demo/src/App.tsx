@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Play, Square, RefreshCw, Trophy, ShieldAlert, Award, Smartphone, ChevronDown, ChevronUp, Music, Flame, Clock, X } from 'lucide-react';
+import { Play, Square, RefreshCw, Trophy, ShieldAlert, Award, Smartphone, ChevronDown, ChevronUp, Music, Flame, Clock, X, Volume2, VolumeX } from 'lucide-react';
 import { SquatCounter, DanceTracker, DanceMetrics } from '@pocket-motion/core';
 import { MotionSample, CounterState, WorkoutRecord } from '@pocket-motion/types';
 
@@ -19,6 +19,7 @@ export default function App() {
   const [ballOffset, setBallOffset] = useState({ x: 0, y: 0 });
   const [isReloading, setIsReloading] = useState(false);
   const [workoutType, setWorkoutType] = useState<'squat' | 'pushup' | 'walk' | 'dance'>('squat');
+  const [isSoundOn, setIsSoundOn] = useState(true);
 
   // 운동 히스토리 기록 관련 상태 및 레프
   const [records, setRecords] = useState<WorkoutRecord[]>([]);
@@ -205,6 +206,7 @@ export default function App() {
 
   // 4. 휴식 만료 3초 전 준비 비프 (짧은 삑 소리)
   const playCountdownTick = () => {
+    if (!isSoundOn) return;
     const ctx = getOrCreateAudioContext();
     if (!ctx) return;
 
@@ -226,6 +228,7 @@ export default function App() {
 
   // 1. 운동 시작 차임 (도-미-솔 상승음)
   const playStartChime = () => {
+    if (!isSoundOn) return;
     const ctx = getOrCreateAudioContext();
     if (!ctx) return;
     
@@ -253,6 +256,7 @@ export default function App() {
 
   // 2. 매 회차 완료 차임 (딩~동~ 청아하고 빠른 2연음 - 지체 없이 반응)
   const playRepCompleteChime = () => {
+    if (!isSoundOn) return;
     const ctx = getOrCreateAudioContext();
     if (!ctx) return;
 
@@ -280,6 +284,7 @@ export default function App() {
 
   // 3. 세트 완료 빵빠레 (화려한 트럼펫 스타일의 팡파르 연주)
   const playSetCompleteFanfare = () => {
+    if (!isSoundOn) return;
     const ctx = getOrCreateAudioContext();
     if (!ctx) return;
 
@@ -1480,7 +1485,7 @@ export default function App() {
                           <div className={`counter-display ${bump ? 'bump' : ''}`}>
                             {count}
                           </div>
-                          <div style={{ fontSize: '0.95rem', color: '#64748b', marginBottom: '2rem' }}>
+                          <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#94a3b8', marginBottom: '2rem' }}>
                             {workoutType === 'walk' ? '목표 걸음 수' : '목표 횟수'}: <strong style={{ color: '#fff' }}>{targetCount || 10}</strong> {workoutType === 'walk' ? '걸음' : '회'}
                           </div>
                         </>
@@ -1491,7 +1496,7 @@ export default function App() {
                               <div className={`counter-display ${bump ? 'bump' : ''}`} style={{ color: '#38bdf8' }}>
                                 {count}
                               </div>
-                              <div style={{ fontSize: '0.95rem', color: '#64748b', marginBottom: '2rem' }}>
+                              <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#94a3b8', marginBottom: '2rem' }}>
                                 남은 시간: <strong style={{ color: '#fff' }}>{timeRemaining}</strong>초 / 세트 시간: {workDuration}초
                               </div>
                             </>
@@ -1500,7 +1505,7 @@ export default function App() {
                               <div className="counter-display" style={{ color: '#38bdf8', fontFamily: 'monospace' }}>
                                 {timeRemaining}s
                               </div>
-                              <div style={{ fontSize: '0.95rem', color: '#64748b', marginBottom: '2rem' }}>
+                              <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#94a3b8', marginBottom: '2rem' }}>
                                 현재 수행 횟수: <strong style={{ color: '#fff' }}>{count}</strong> 회 / 세트 시간: {workDuration}초
                               </div>
                             </>
@@ -1556,6 +1561,64 @@ export default function App() {
                       </div>
                     </div>
                   )}
+
+                  {/* 실시간 설정 컨트롤 (소리 및 민감도) */}
+                  <div style={{ 
+                    width: '100%', 
+                    background: 'rgba(255, 255, 255, 0.02)', 
+                    border: '1px solid rgba(255, 255, 255, 0.05)', 
+                    borderRadius: '16px', 
+                    padding: '1rem', 
+                    marginBottom: '1.5rem',
+                    textAlign: 'left'
+                  }}>
+                    {/* 소리 토글 */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: workoutType !== 'dance' ? '1rem' : '0' }}>
+                      <span style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        {isSoundOn ? <Volume2 size={16} color="#c084fc" /> : <VolumeX size={16} color="#64748b" />}
+                        알림음 소리
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setIsSoundOn(!isSoundOn)}
+                        style={{
+                          background: isSoundOn ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                          border: isSoundOn ? '1px solid rgba(139, 92, 246, 0.4)' : '1px solid rgba(255, 255, 255, 0.1)',
+                          borderRadius: '10px',
+                          padding: '0.4rem 0.8rem',
+                          color: isSoundOn ? '#c084fc' : '#64748b',
+                          fontSize: '0.8rem',
+                          fontWeight: '700',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.25rem'
+                        }}
+                      >
+                        {isSoundOn ? '소리 켬' : '음소거'}
+                      </button>
+                    </div>
+
+                    {/* 실시간 민감도 (댄스 모드가 아닐 때만 노출) */}
+                    {workoutType !== 'dance' && (
+                      <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '0.75rem' }}>
+                        <label style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: '700', display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                          <span>🏃 실시간 감지 민감도</span>
+                          <span style={{ color: '#c084fc' }}>{sensitivity} / 10</span>
+                        </label>
+                        <input
+                          type="range"
+                          min="1"
+                          max="10"
+                          value={sensitivity}
+                          onChange={(e) => setSensitivity(parseInt(e.target.value, 10))}
+                          className="sensitivity-slider"
+                          style={{ margin: '0.5rem 0' }}
+                        />
+                      </div>
+                    )}
+                  </div>
 
                   {/* Stop & Pause controls */}
                   <div style={{ width: '100%', display: 'flex', gap: '1rem' }}>
@@ -1621,148 +1684,152 @@ export default function App() {
       )}
 
       {/* 📊 나의 운동 히스토리 대시보드 */}
-      <div className="history-section">
-        <button 
-          className="history-toggle-btn"
-          onClick={() => setShowHistory(!showHistory)}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span>📊 나의 운동 히스토리</span>
-            <span className="history-count-badge">{records.length}</span>
-          </div>
-          {showHistory ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-        </button>
+      {!isActive && (
+        <div className="history-section">
+          <button 
+            className="history-toggle-btn"
+            onClick={() => setShowHistory(!showHistory)}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span>📊 나의 운동 히스토리</span>
+              <span className="history-count-badge">{records.length}</span>
+            </div>
+            {showHistory ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+          </button>
 
-        {showHistory && (
-          <div className="history-content-box animate-fade-in">
-            {records.length > 0 && (
-              <div className="history-actions-bar">
-                <button className="btn-history-action export" onClick={exportHistory}>
-                  📥 기록 내보내기 (JSON)
-                </button>
-                <button className="btn-history-action clear" onClick={clearHistory}>
-                  🗑️ 기록 전체 삭제
-                </button>
-              </div>
-            )}
+          {showHistory && (
+            <div className="history-content-box animate-fade-in">
+              {records.length > 0 && (
+                <div className="history-actions-bar">
+                  <button className="btn-history-action export" onClick={exportHistory}>
+                    📥 기록 내보내기 (JSON)
+                  </button>
+                  <button className="btn-history-action clear" onClick={clearHistory}>
+                    🗑️ 기록 전체 삭제
+                  </button>
+                </div>
+              )}
 
-            {records.length === 0 ? (
-              <div className="history-empty-state">
-                <p>아직 운동 기록이 없습니다.</p>
-                <p style={{ fontSize: '0.8rem', color: '#475569', marginTop: '0.25rem' }}>
-                  지금 시작해서 첫 기록을 남겨보세요! 🔥
-                </p>
-              </div>
-            ) : (
-              <div className="history-list">
-                {records.map((record) => {
-                  const date = new Date(record.timestamp);
-                  const dateStr = `${date.getMonth() + 1}월 ${date.getDate()}일 ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
-                  
-                  let typeLabel = '';
-                  let typeColor = '';
-                  let typeBg = '';
-                  if (record.workoutType === 'squat') {
-                    typeLabel = '🦵 스쿼트';
-                    typeColor = '#a78bfa'; // 보라
-                    typeBg = 'rgba(167, 139, 250, 0.1)';
-                  } else if (record.workoutType === 'pushup') {
-                    typeLabel = '💪 푸시업';
-                    typeColor = '#f472b6'; // 분홍
-                    typeBg = 'rgba(244, 114, 182, 0.1)';
-                  } else if (record.workoutType === 'walk') {
-                    typeLabel = '🚶 걷기';
-                    typeColor = '#38bdf8'; // 하늘
-                    typeBg = 'rgba(56, 189, 248, 0.1)';
-                  } else if (record.workoutType === 'dance') {
-                    typeLabel = '🎵 댄스';
-                    typeColor = '#fb7185'; // 장미
-                    typeBg = 'rgba(251, 113, 133, 0.1)';
-                  }
+              {records.length === 0 ? (
+                <div className="history-empty-state">
+                  <p>아직 운동 기록이 없습니다.</p>
+                  <p style={{ fontSize: '0.8rem', color: '#475569', marginTop: '0.25rem' }}>
+                    지금 시작해서 첫 기록을 남겨보세요! 🔥
+                  </p>
+                </div>
+              ) : (
+                <div className="history-list">
+                  {records.map((record) => {
+                    const date = new Date(record.timestamp);
+                    const dateStr = `${date.getMonth() + 1}월 ${date.getDate()}일 ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+                    
+                    let typeLabel = '';
+                    let typeColor = '';
+                    let typeBg = '';
+                    if (record.workoutType === 'squat') {
+                      typeLabel = '🦵 스쿼트';
+                      typeColor = '#a78bfa'; // 보라
+                      typeBg = 'rgba(167, 139, 250, 0.1)';
+                    } else if (record.workoutType === 'pushup') {
+                      typeLabel = '💪 푸시업';
+                      typeColor = '#f472b6'; // 분홍
+                      typeBg = 'rgba(244, 114, 182, 0.1)';
+                    } else if (record.workoutType === 'walk') {
+                      typeLabel = '🚶 걷기';
+                      typeColor = '#38bdf8'; // 하늘
+                      typeBg = 'rgba(56, 189, 248, 0.1)';
+                    } else if (record.workoutType === 'dance') {
+                      typeLabel = '🎵 댄스';
+                      typeColor = '#fb7185'; // 장미
+                      typeBg = 'rgba(251, 113, 133, 0.1)';
+                    }
 
-                  const isDance = record.workoutType === 'dance';
-                  const isTimeMode = record.workoutMode === 'time';
+                    const isDance = record.workoutType === 'dance';
+                    const isTimeMode = record.workoutMode === 'time';
 
-                  return (
-                    <div key={record.id} className="history-item-card">
-                      <div className="history-item-header">
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <span 
-                            className="history-item-badge" 
-                            style={{ 
-                              color: typeColor, 
-                              background: typeBg, 
-                              border: `1px solid ${typeColor === '#a78bfa' ? 'rgba(167, 139, 250, 0.2)' : typeColor === '#f472b6' ? 'rgba(244, 114, 182, 0.2)' : typeColor === '#38bdf8' ? 'rgba(56, 189, 248, 0.2)' : 'rgba(251, 113, 133, 0.2)'}` 
-                            }}
+                    return (
+                      <div key={record.id} className="history-item-card">
+                        <div className="history-item-header">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span 
+                              className="history-item-badge" 
+                              style={{ 
+                                color: typeColor, 
+                                background: typeBg, 
+                                border: `1px solid ${typeColor === '#a78bfa' ? 'rgba(167, 139, 250, 0.2)' : typeColor === '#f472b6' ? 'rgba(244, 114, 182, 0.2)' : typeColor === '#38bdf8' ? 'rgba(56, 189, 248, 0.2)' : 'rgba(251, 113, 133, 0.2)'}` 
+                              }}
+                            >
+                              {typeLabel}
+                            </span>
+                            <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                              {dateStr}
+                            </span>
+                          </div>
+                          <button 
+                            className="btn-history-item-delete"
+                            onClick={() => deleteRecord(record.id)}
+                            title="삭제"
                           >
-                            {typeLabel}
-                          </span>
-                          <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                            {dateStr}
-                          </span>
+                            <X size={14} />
+                          </button>
                         </div>
-                        <button 
-                          className="btn-history-item-delete"
-                          onClick={() => deleteRecord(record.id)}
-                          title="삭제"
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
 
-                      <div className="history-item-body">
-                        <div className="history-item-stats">
-                          {!isDance ? (
-                            <>
-                              <div>
-                                <span className="stat-label">세트 달성도</span>
-                                <span className="stat-val">{record.completedSets} / {record.totalSets} 세트</span>
-                              </div>
-                              <div>
-                                <span className="stat-label">총 횟수</span>
-                                <span className="stat-val" style={{ color: '#fff' }}>{record.totalCount}회</span>
-                              </div>
-                              {isTimeMode && (
+                        <div className="history-item-body">
+                          <div className="history-item-stats">
+                            {!isDance ? (
+                              <>
                                 <div>
-                                  <span className="stat-label">운동 시간</span>
+                                  <span className="stat-label">세트 달성도</span>
+                                  <span className="stat-val">{record.completedSets} / {record.totalSets} 세트</span>
+                                </div>
+                                <div>
+                                  <span className="stat-label">총 횟수</span>
+                                  <span className="stat-val" style={{ color: '#fff' }}>{record.totalCount}회</span>
+                                </div>
+                                {isTimeMode && (
+                                  <div>
+                                    <span className="stat-label">운동 시간</span>
+                                    <span className="stat-val">{formatDuration(record.durationMs)}</span>
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                <div>
+                                  <span className="stat-label">댄스 시간</span>
                                   <span className="stat-val">{formatDuration(record.durationMs)}</span>
                                 </div>
-                              )}
-                            </>
-                          ) : (
-                            <>
-                              <div>
-                                <span className="stat-label">댄스 시간</span>
-                                <span className="stat-val">{formatDuration(record.durationMs)}</span>
-                              </div>
-                              <div>
-                                <span className="stat-label">에너지 점수</span>
-                                <span className="stat-val" style={{ color: '#d946ef' }}>{record.energy}점</span>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                        
-                        <div className="history-item-calories">
-                          <Flame size={12} color="#ec4899" />
-                          <span>{record.calories} kcal 소모</span>
+                                <div>
+                                  <span className="stat-label">에너지 점수</span>
+                                  <span className="stat-val" style={{ color: '#d946ef' }}>{record.energy}점</span>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                          
+                          <div className="history-item-calories">
+                            <Flame size={12} color="#ec4899" />
+                            <span>{record.calories} kcal 소모</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      <footer style={{ textAlign: 'center', fontSize: '0.75rem', color: '#475569', marginTop: 'auto', paddingTop: '2rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-        <div>Pocket Motion Counter Demo v{__APP_VERSION__}</div>
-        <div style={{ color: '#334155', fontSize: '0.65rem' }}>
-          배포 버전: v{__APP_VERSION__} ({__BUILD_TIME__})
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
-      </footer>
-    </div>
+      )}
+
+      {!isActive && (
+        <footer style={{ textAlign: 'center', fontSize: '0.75rem', color: '#475569', marginTop: 'auto', paddingTop: '2rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+      <div>Pocket Motion Counter Demo v{__APP_VERSION__}</div>
+      <div style={{ color: '#334155', fontSize: '0.65rem' }}>
+        배포 버전: v{__APP_VERSION__} ({__BUILD_TIME__})
+      </div>
+    </footer>
+  )}
+</div>
   );
 }
