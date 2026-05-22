@@ -19,6 +19,9 @@ export default function App() {
   const [ballOffset, setBallOffset] = useState({ x: 0, y: 0 });
   const [showAudioTip, setShowAudioTip] = useState(false);
   const [isReloading, setIsReloading] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
+  const [debugMag, setDebugMag] = useState(0);
+  const [debugFilteredMag, setDebugFilteredMag] = useState(9.8);
 
   const counterRef = useRef<SquatCounter | null>(null);
 
@@ -199,7 +202,8 @@ export default function App() {
 
   // Initialize Motion Engine
   useEffect(() => {
-    const thresholdVal = Number((2.2 - sensitivity * 0.2).toFixed(2));
+    // 민감도 수식 튜닝: 1(둔감)일 때 1.8, 5(보통)일 때 1.2, 10(민감)일 때 0.6으로 정밀 맵핑
+    const thresholdVal = Number((1.8 - (sensitivity - 1) * (1.2 / 9)).toFixed(2));
     const squatCounter = new SquatCounter({
       targetCount: targetCount === "" ? 10 : targetCount,
       thresholdDown: thresholdVal,
@@ -231,6 +235,11 @@ export default function App() {
       triggerVibration([100, 50, 100, 50, 200]);
     });
 
+    squatCounter.onDebug((data) => {
+      setDebugMag(Number(data.magnitude.toFixed(3)));
+      setDebugFilteredMag(Number(data.filteredMagnitude.toFixed(3)));
+    });
+
     counterRef.current = squatCounter;
 
     return () => {
@@ -246,9 +255,29 @@ export default function App() {
     }
 
     const handleMotionEvent = (event: DeviceMotionEvent) => {
-      const accel = event.accelerationIncludingGravity || { x: 0, y: 0, z: 0 };
       const linear = event.acceleration || { x: null, y: null, z: null };
       const gyro = event.rotationRate || { alpha: null, beta: null, gamma: null };
+
+      let accelX = event.accelerationIncludingGravity?.x;
+      let accelY = event.accelerationIncludingGravity?.y;
+      let accelZ = event.accelerationIncludingGravity?.z;
+
+      // 만약 중력가속도 데이터가 완전히 누락되거나(null) 0으로 고정되는 경우, 순수 가속도로 가상 중력을 모사
+      if (
+        accelX === null || accelY === null || accelZ === null ||
+        accelX === undefined || accelY === undefined || accelZ === undefined ||
+        (accelX === 0 && accelY === 0 && accelZ === 0)
+      ) {
+        if (linear.x !== null && linear.y !== null && linear.z !== null) {
+          accelX = linear.x;
+          accelY = linear.y + 9.80665;
+          accelZ = linear.z;
+        } else {
+          accelX = 0;
+          accelY = 9.80665;
+          accelZ = 0;
+        }
+      }
 
       // 가속도 센서값 기반으로 구슬 물리 오프셋 계산 (움직임 반대 관성 방향)
       const linearX = linear.x || 0;
@@ -271,9 +300,9 @@ export default function App() {
 
       const sample: MotionSample = {
         timestamp: Date.now(),
-        accelX: accel.x || 0,
-        accelY: accel.y || 0,
-        accelZ: accel.z || 0,
+        accelX: accelX,
+        accelY: accelY,
+        accelZ: accelZ,
         linearX: linear.x,
         linearY: linear.y,
         linearZ: linear.z,
@@ -594,6 +623,52 @@ export default function App() {
                 <div className="audio-tip-item">
                   <strong>3. 기기 미디어 볼륨 확인</strong>
                   <p>스마트폰의 미디어 음량이 음소거 또는 너무 낮게 설정되어 있는지 확인하고 볼륨을 키워 주세요.</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Debug Toggle & Panel */}
+          <div style={{ marginTop: '1.5rem', width: '100%', maxWidth: '480px', textAlign: 'center' }}>
+            <button
+              onClick={() => setShowDebug(!showDebug)}
+              style={{
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                padding: '0.4rem 0.8rem',
+                borderRadius: '8px',
+                color: '#64748b',
+                fontSize: '0.75rem',
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+            >
+              {showDebug ? '⚙️ 디버그 패널 닫기' : '⚙️ 개발자 디버그 패널 열기'}
+            </button>
+
+            {showDebug && (
+              <div style={{
+                background: 'rgba(15, 23, 42, 0.65)',
+                border: '1px solid rgba(139, 92, 246, 0.2)',
+                borderRadius: '12px',
+                padding: '1rem',
+                marginTop: '0.5rem',
+                textAlign: 'left',
+                fontSize: '0.8rem',
+                color: '#94a3b8',
+                lineHeight: '1.6',
+                fontFamily: 'monospace'
+              }}>
+                <div style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '0.25rem', marginBottom: '0.25rem', color: '#c084fc', fontWeight: 'bold' }}>
+                  실시간 센서 디버그 데이터
+                </div>
+                <div>센서 수신 여부: <span style={{ color: debugMag !== 0 ? '#10b981' : '#f43f5e' }}>{debugMag !== 0 ? '정상 수신 중' : '대기 중 (0)'}</span></div>
+                <div>실시간 가속도 크기 (mag): <strong style={{ color: '#fff' }}>{debugMag}</strong> m/s²</div>
+                <div>LPF 필터링 가속도 (filtered): <strong style={{ color: '#8b5cf6' }}>{debugFilteredMag}</strong> m/s²</div>
+                <div>카운터 상태 (FSM State): <strong style={{ color: '#f59e0b' }}>{currentState.toUpperCase()}</strong></div>
+                <div>설정 임계값 (Threshold): <strong>{Number((1.8 - (sensitivity - 1) * (1.2 / 9)).toFixed(2))}</strong> (민감도: {sensitivity})</div>
+                <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '0.25rem' }}>
+                  ※ 스쿼트 카운트 원리: 하강 시 가속도가 {Number((9.8 - (1.8 - (sensitivity - 1) * (1.2 / 9))).toFixed(2))} 이하로 감소하고, 최저점에서 회복된 후, 상승 시 {Number((9.8 + (1.8 - (sensitivity - 1) * (1.2 / 9))).toFixed(2))} 이상으로 가속도가 치솟아야 1회가 인정됩니다.
                 </div>
               </div>
             )}
