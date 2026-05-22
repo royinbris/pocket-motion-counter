@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Play, Square, RefreshCw, Trophy, ShieldAlert, Award, Smartphone, VolumeX, ChevronDown, ChevronUp, Music, Flame, Clock, X } from 'lucide-react';
 import { SquatCounter, DanceTracker, DanceMetrics } from '@pocket-motion/core';
-import { MotionSample, CounterState } from '@pocket-motion/types';
+import { MotionSample, CounterState, WorkoutRecord } from '@pocket-motion/types';
 
 // Vite define 매크로를 통한 글로벌 컴파일 타임 상수
 declare const __APP_VERSION__: string;
@@ -24,6 +24,100 @@ export default function App() {
   const [debugFilteredMag, setDebugFilteredMag] = useState(9.8);
   const [workoutType, setWorkoutType] = useState<'squat' | 'pushup' | 'walk' | 'dance'>('squat');
 
+  // 운동 히스토리 기록 관련 상태 및 레프
+  const [records, setRecords] = useState<WorkoutRecord[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+
+  const totalAccumulatedCountRef = useRef<number>(0);
+  const workoutActiveDurationMsRef = useRef<number>(0);
+  const currentSegmentStartTimeRef = useRef<number | null>(null);
+
+  const countRef = useRef(0);
+
+  useEffect(() => {
+    countRef.current = count;
+  }, [count]);
+
+  // 컴포넌트 마운트 시 LocalStorage에서 기록 읽어오기
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('pocket-motion-history');
+      if (stored) {
+        setRecords(JSON.parse(stored));
+      }
+    } catch (e) {
+      console.error('기록 불러오기 실패:', e);
+    }
+  }, []);
+
+  // 운동 기록을 LocalStorage에 저장하는 핵심 유틸리티
+  const saveWorkoutRecord = (completedSetsOverride?: number) => {
+    // 순수 운동 시간 누적 반영
+    let sessionDurationMs = workoutActiveDurationMsRef.current;
+    if (isActive && !isResting && currentSegmentStartTimeRef.current) {
+      sessionDurationMs += Date.now() - currentSegmentStartTimeRef.current;
+    }
+
+    const currentCount = countRef.current;
+    const finalCompletedSets = completedSetsOverride !== undefined 
+      ? completedSetsOverride 
+      : (isCompleted ? totalSets : Math.max(0, currentSet - 1));
+    
+    // 댄스의 경우 completedSets는 무의미(0 또는 1)이므로 1로 지정
+    const recordCompletedSets = workoutType === 'dance' ? 1 : finalCompletedSets;
+    const recordTotalSets = workoutType === 'dance' ? 1 : totalSets;
+    const recordTotalCount = workoutType === 'dance' ? 0 : (totalAccumulatedCountRef.current + (isActive && !isResting ? currentCount : 0));
+    
+    // 칼로리 계산
+    let calculatedCalories = 0;
+    if (workoutType === 'squat') {
+      calculatedCalories = recordTotalCount * 0.4;
+    } else if (workoutType === 'pushup') {
+      calculatedCalories = recordTotalCount * 0.3;
+    } else if (workoutType === 'walk') {
+      calculatedCalories = recordTotalCount * 0.04;
+    } else if (workoutType === 'dance') {
+      calculatedCalories = danceMetricsRef.current.estimatedCalories;
+    }
+    calculatedCalories = Number(calculatedCalories.toFixed(2));
+
+    // 유의미한 운동 결과만 저장 (예: 일반 운동 1회 이상 혹은 댄스 3초 이상)
+    const isDance = workoutType === 'dance';
+    const hasProgress = isDance ? danceMetricsRef.current.activeDurationMs > 3000 : recordTotalCount > 0;
+    if (!hasProgress) return;
+
+    const newRecord: WorkoutRecord = {
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: Date.now(),
+      workoutType,
+      workoutMode: workoutType === 'dance' ? 'dance' : (workoutMode as any),
+      totalSets: recordTotalSets,
+      completedSets: recordCompletedSets,
+      totalCount: recordTotalCount,
+      durationMs: workoutType === 'dance' ? danceMetricsRef.current.activeDurationMs : sessionDurationMs,
+      calories: calculatedCalories,
+      energy: workoutType === 'dance' ? danceMetricsRef.current.totalEnergy : 0
+    };
+
+    setRecords((prev) => {
+      const updated = [newRecord, ...prev];
+      try {
+        localStorage.setItem('pocket-motion-history', JSON.stringify(updated));
+      } catch (e) {
+        console.error('LocalStorage 저장 실패:', e);
+      }
+      return updated;
+    });
+
+    // 기록 저장이 완료되었으므로 누적 액티브 시간 초기화
+    workoutActiveDurationMsRef.current = 0;
+    if (isActive && !isResting) {
+      currentSegmentStartTimeRef.current = Date.now();
+    } else {
+      currentSegmentStartTimeRef.current = null;
+    }
+  };
+
   // 다중 세트 및 시간 기반 루틴 관련 신규 상태
   const [workoutMode, setWorkoutMode] = useState<'rep' | 'time'>('rep');
   const [totalSets, setTotalSets] = useState<number>(3);
@@ -40,6 +134,11 @@ export default function App() {
     estimatedCalories: 0,
     intensity: 0
   });
+
+  const danceMetricsRef = useRef(danceMetrics);
+  useEffect(() => {
+    danceMetricsRef.current = danceMetrics;
+  }, [danceMetrics]);
 
   // Black Saver State
   const [showBlackSaver, setShowBlackSaver] = useState(false);
@@ -409,6 +508,7 @@ export default function App() {
           counterRef.current?.reset();
           counterRef.current?.start();
         }
+        currentSegmentStartTimeRef.current = Date.now();
         resetBlackSaverTimer();
       } else {
         // 운동 중 시간 만료 -> 세트 완료 처리
@@ -425,6 +525,15 @@ export default function App() {
     if (workoutType !== 'dance') {
       counterRef.current?.stop();
     }
+
+    // 세그먼트 시간 누적
+    if (currentSegmentStartTimeRef.current) {
+      workoutActiveDurationMsRef.current += Date.now() - currentSegmentStartTimeRef.current;
+      currentSegmentStartTimeRef.current = null;
+    }
+    
+    // 현재 세트의 횟수를 누적 카운트에 더함
+    totalAccumulatedCountRef.current += countRef.current;
     
     const curSet = currentSetRef.current;
     const totSets = totalSetsRef.current;
@@ -446,6 +555,9 @@ export default function App() {
       releaseWakeLock(); // 화면 꺼짐 해제
       playSetCompleteFanfare(); // 팡파르
       triggerVibration([100, 50, 100, 50, 200]);
+
+      // 최종 기록 저장
+      saveWorkoutRecord(totSets);
     }
   };
 
@@ -465,6 +577,7 @@ export default function App() {
       counterRef.current?.reset();
       counterRef.current?.start();
     }
+    currentSegmentStartTimeRef.current = Date.now();
     resetBlackSaverTimer();
   };
 
@@ -633,9 +746,13 @@ export default function App() {
         if (workoutMode === 'time') {
           setTimeRemaining(Number(workDuration) || 30);
         }
+        totalAccumulatedCountRef.current = 0;
+        workoutActiveDurationMsRef.current = 0;
       }
       counterRef.current.start();
     }
+    
+    currentSegmentStartTimeRef.current = Date.now();
     
     // 오디오 컨텍스트 사전 활성화
     getOrCreateAudioContext();
@@ -652,6 +769,12 @@ export default function App() {
     } else {
       counterRef.current?.stop();
     }
+
+    if (currentSegmentStartTimeRef.current) {
+      workoutActiveDurationMsRef.current += Date.now() - currentSegmentStartTimeRef.current;
+      currentSegmentStartTimeRef.current = null;
+    }
+
     setIsActive(false);
     setBallOffset({ x: 0, y: 0 });
     await releaseWakeLock(); // 화면 꺼짐 방지 해제
@@ -659,7 +782,37 @@ export default function App() {
 
   const handleReset = async () => {
     if (workoutType === 'dance') {
+      danceTrackerRef.current?.stop();
+    } else {
+      counterRef.current?.stop();
+    }
+
+    if (currentSegmentStartTimeRef.current) {
+      workoutActiveDurationMsRef.current += Date.now() - currentSegmentStartTimeRef.current;
+      currentSegmentStartTimeRef.current = null;
+    }
+
+    const currentCount = countRef.current;
+    const totalCountSoFar = totalAccumulatedCountRef.current + currentCount;
+    const isDance = workoutType === 'dance';
+    const hasProgress = isDance 
+      ? danceMetricsRef.current.activeDurationMs > 3000 
+      : totalCountSoFar > 0;
+
+    if (hasProgress) {
+      if (window.confirm("현재까지 수행한 운동을 기록에 저장하시겠습니까?")) {
+        saveWorkoutRecord();
+      }
+    }
+
+    if (workoutType === 'dance') {
       danceTrackerRef.current?.reset();
+      setDanceMetrics({
+        activeDurationMs: 0,
+        totalEnergy: 0,
+        estimatedCalories: 0,
+        intensity: 0
+      });
     } else {
       counterRef.current?.reset();
     }
@@ -672,6 +825,9 @@ export default function App() {
     setTimeRemaining(0);
     setBallOffset({ x: 0, y: 0 });
     setShowBlackSaver(false);
+    totalAccumulatedCountRef.current = 0;
+    workoutActiveDurationMsRef.current = 0;
+    currentSegmentStartTimeRef.current = null;
     await releaseWakeLock(); // 화면 꺼짐 방지 해제
   };
 
@@ -701,6 +857,47 @@ export default function App() {
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  // 기록 내보내기 (JSON 다운로드)
+  const exportHistory = () => {
+    try {
+      const dataStr = JSON.stringify(records, null, 2);
+      const blob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const filename = `pocket-motion-history-${dateStr}.json`;
+
+      const linkElement = document.createElement('a');
+      linkElement.href = url;
+      linkElement.download = filename;
+      linkElement.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('기록 내보내기 실패:', e);
+      alert('기록 내보내기에 실패했습니다.');
+    }
+  };
+
+  // 기록 전체 삭제
+  const clearHistory = () => {
+    if (window.confirm("정말로 모든 운동 기록을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.")) {
+      localStorage.removeItem('pocket-motion-history');
+      setRecords([]);
+    }
+  };
+
+  // 기록 개별 삭제
+  const deleteRecord = (id: string) => {
+    if (window.confirm("이 기록을 삭제하시겠습니까?")) {
+      const updated = records.filter(r => r.id !== id);
+      setRecords(updated);
+      try {
+        localStorage.setItem('pocket-motion-history', JSON.stringify(updated));
+      } catch (e) {
+        console.error('LocalStorage 저장 실패:', e);
+      }
+    }
   };
 
   // Helper for generating state tag class
@@ -996,58 +1193,75 @@ export default function App() {
                         <label style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: '700', display: 'block', marginBottom: '0.5rem' }}>
                           세트당 목표 횟수
                         </label>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-                          <div style={{ position: 'relative', display: 'inline-block' }}>
-                            <input
-                              type="number"
-                              inputMode="numeric"
-                              pattern="[0-9]*"
-                              min="1"
-                              max="100"
-                              value={targetCount}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                if (val === "") {
-                                  setTargetCount("");
-                                } else {
-                                  const parsed = parseInt(val, 10);
-                                  if (!isNaN(parsed)) {
-                                    setTargetCount(Math.min(100, Math.max(1, parsed)));
-                                  }
+                        <div style={{ 
+                          position: 'relative', 
+                          display: 'inline-flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'center', 
+                          width: '100%', 
+                          maxWidth: '320px', 
+                          margin: '0 auto' 
+                        }}>
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            min="1"
+                            max="100"
+                            value={targetCount}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === "") {
+                                setTargetCount("");
+                              } else {
+                                const parsed = parseInt(val, 10);
+                                if (!isNaN(parsed)) {
+                                  setTargetCount(Math.min(100, Math.max(1, parsed)));
                                 }
-                              }}
-                              onBlur={handleBlurTargetCount}
-                              className="input-field-giant"
-                              style={{ margin: 0, paddingRight: '2.5rem' }}
-                            />
+                              }
+                            }}
+                            onBlur={handleBlurTargetCount}
+                            className="input-field-giant"
+                            style={{ 
+                              margin: 0, 
+                              width: '100%', 
+                              paddingLeft: '4rem', 
+                              paddingRight: '4rem',
+                              textAlign: 'center' 
+                            }}
+                          />
+                          <div style={{ 
+                            position: 'absolute', 
+                            right: '1.25rem', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '0.5rem',
+                            pointerEvents: 'auto' 
+                          }}>
                             {targetCount !== "" && (
                               <button
                                 type="button"
                                 onClick={() => setTargetCount("")}
                                 style={{
-                                  position: 'absolute',
-                                  right: '10px',
-                                  top: '50%',
-                                  transform: 'translateY(-50%)',
                                   background: 'rgba(255, 255, 255, 0.1)',
                                   border: 'none',
                                   borderRadius: '50%',
-                                  width: '24px',
-                                  height: '24px',
+                                  width: '28px',
+                                  height: '28px',
                                   display: 'flex',
                                   alignItems: 'center',
                                   justifyContent: 'center',
                                   cursor: 'pointer',
                                   color: '#94a3b8',
-                                  padding: 0
+                                  padding: 0,
                                 }}
                                 title="지우기"
                               >
-                                <X size={12} />
+                                <X size={14} />
                               </button>
                             )}
+                            <span style={{ fontSize: '1.5rem', fontWeight: '800', color: '#64748b', userSelect: 'none' }}>회</span>
                           </div>
-                          <span style={{ fontSize: '1.5rem', fontWeight: '800', color: '#64748b' }}>회</span>
                         </div>
                       </div>
                     )}
@@ -1058,58 +1272,75 @@ export default function App() {
                         <label style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: '700', display: 'block', marginBottom: '0.5rem' }}>
                           세트당 운동 시간
                         </label>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-                          <div style={{ position: 'relative', display: 'inline-block' }}>
-                            <input
-                              type="number"
-                              inputMode="numeric"
-                              pattern="[0-9]*"
-                              min="10"
-                              max="86400"
-                              value={workDuration}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                if (val === "") {
-                                  setWorkDuration("");
-                                } else {
-                                  const parsed = parseInt(val, 10);
-                                  if (!isNaN(parsed)) {
-                                    setWorkDuration(Math.min(86400, Math.max(1, parsed)));
-                                  }
+                        <div style={{ 
+                          position: 'relative', 
+                          display: 'inline-flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'center', 
+                          width: '100%', 
+                          maxWidth: '320px', 
+                          margin: '0 auto' 
+                        }}>
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            min="10"
+                            max="86400"
+                            value={workDuration}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === "") {
+                                setWorkDuration("");
+                              } else {
+                                const parsed = parseInt(val, 10);
+                                if (!isNaN(parsed)) {
+                                  setWorkDuration(Math.min(86400, Math.max(1, parsed)));
                                 }
-                              }}
-                              onBlur={handleBlurWorkDuration}
-                              className="input-field-giant"
-                              style={{ margin: 0, paddingRight: '2.5rem' }}
-                            />
+                              }
+                            }}
+                            onBlur={handleBlurWorkDuration}
+                            className="input-field-giant"
+                            style={{ 
+                              margin: 0, 
+                              width: '100%', 
+                              paddingLeft: '4rem', 
+                              paddingRight: '4rem',
+                              textAlign: 'center' 
+                            }}
+                          />
+                          <div style={{ 
+                            position: 'absolute', 
+                            right: '1.25rem', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '0.5rem',
+                            pointerEvents: 'auto' 
+                          }}>
                             {workDuration !== "" && (
                               <button
                                 type="button"
                                 onClick={() => setWorkDuration("")}
                                 style={{
-                                  position: 'absolute',
-                                  right: '10px',
-                                  top: '50%',
-                                  transform: 'translateY(-50%)',
                                   background: 'rgba(255, 255, 255, 0.1)',
                                   border: 'none',
                                   borderRadius: '50%',
-                                  width: '24px',
-                                  height: '24px',
+                                  width: '28px',
+                                  height: '28px',
                                   display: 'flex',
                                   alignItems: 'center',
                                   justifyContent: 'center',
                                   cursor: 'pointer',
                                   color: '#94a3b8',
-                                  padding: 0
+                                  padding: 0,
                                 }}
                                 title="지우기"
                               >
-                                <X size={12} />
+                                <X size={14} />
                               </button>
                             )}
+                            <span style={{ fontSize: '1.5rem', fontWeight: '800', color: '#64748b', userSelect: 'none' }}>초</span>
                           </div>
-                          <span style={{ fontSize: '1.5rem', fontWeight: '800', color: '#64748b' }}>초</span>
                         </div>
                       </div>
                     )}
@@ -1471,6 +1702,143 @@ export default function App() {
           </div>
         </>
       )}
+
+      {/* 📊 나의 운동 히스토리 대시보드 */}
+      <div className="history-section">
+        <button 
+          className="history-toggle-btn"
+          onClick={() => setShowHistory(!showHistory)}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span>📊 나의 운동 히스토리</span>
+            <span className="history-count-badge">{records.length}</span>
+          </div>
+          {showHistory ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+        </button>
+
+        {showHistory && (
+          <div className="history-content-box animate-fade-in">
+            {records.length > 0 && (
+              <div className="history-actions-bar">
+                <button className="btn-history-action export" onClick={exportHistory}>
+                  📥 기록 내보내기 (JSON)
+                </button>
+                <button className="btn-history-action clear" onClick={clearHistory}>
+                  🗑️ 기록 전체 삭제
+                </button>
+              </div>
+            )}
+
+            {records.length === 0 ? (
+              <div className="history-empty-state">
+                <p>아직 운동 기록이 없습니다.</p>
+                <p style={{ fontSize: '0.8rem', color: '#475569', marginTop: '0.25rem' }}>
+                  지금 시작해서 첫 기록을 남겨보세요! 🔥
+                </p>
+              </div>
+            ) : (
+              <div className="history-list">
+                {records.map((record) => {
+                  const date = new Date(record.timestamp);
+                  const dateStr = `${date.getMonth() + 1}월 ${date.getDate()}일 ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+                  
+                  let typeLabel = '';
+                  let typeColor = '';
+                  let typeBg = '';
+                  if (record.workoutType === 'squat') {
+                    typeLabel = '🦵 스쿼트';
+                    typeColor = '#a78bfa'; // 보라
+                    typeBg = 'rgba(167, 139, 250, 0.1)';
+                  } else if (record.workoutType === 'pushup') {
+                    typeLabel = '💪 푸시업';
+                    typeColor = '#f472b6'; // 분홍
+                    typeBg = 'rgba(244, 114, 182, 0.1)';
+                  } else if (record.workoutType === 'walk') {
+                    typeLabel = '🚶 걷기';
+                    typeColor = '#38bdf8'; // 하늘
+                    typeBg = 'rgba(56, 189, 248, 0.1)';
+                  } else if (record.workoutType === 'dance') {
+                    typeLabel = '🎵 댄스';
+                    typeColor = '#fb7185'; // 장미
+                    typeBg = 'rgba(251, 113, 133, 0.1)';
+                  }
+
+                  const isDance = record.workoutType === 'dance';
+                  const isTimeMode = record.workoutMode === 'time';
+
+                  return (
+                    <div key={record.id} className="history-item-card">
+                      <div className="history-item-header">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span 
+                            className="history-item-badge" 
+                            style={{ 
+                              color: typeColor, 
+                              background: typeBg, 
+                              border: `1px solid ${typeColor === '#a78bfa' ? 'rgba(167, 139, 250, 0.2)' : typeColor === '#f472b6' ? 'rgba(244, 114, 182, 0.2)' : typeColor === '#38bdf8' ? 'rgba(56, 189, 248, 0.2)' : 'rgba(251, 113, 133, 0.2)'}` 
+                            }}
+                          >
+                            {typeLabel}
+                          </span>
+                          <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                            {dateStr}
+                          </span>
+                        </div>
+                        <button 
+                          className="btn-history-item-delete"
+                          onClick={() => deleteRecord(record.id)}
+                          title="삭제"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+
+                      <div className="history-item-body">
+                        <div className="history-item-stats">
+                          {!isDance ? (
+                            <>
+                              <div>
+                                <span className="stat-label">세트 달성도</span>
+                                <span className="stat-val">{record.completedSets} / {record.totalSets} 세트</span>
+                              </div>
+                              <div>
+                                <span className="stat-label">총 횟수</span>
+                                <span className="stat-val" style={{ color: '#fff' }}>{record.totalCount}회</span>
+                              </div>
+                              {isTimeMode && (
+                                <div>
+                                  <span className="stat-label">운동 시간</span>
+                                  <span className="stat-val">{formatDuration(record.durationMs)}</span>
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <div>
+                                <span className="stat-label">댄스 시간</span>
+                                <span className="stat-val">{formatDuration(record.durationMs)}</span>
+                              </div>
+                              <div>
+                                <span className="stat-label">에너지 점수</span>
+                                <span className="stat-val" style={{ color: '#d946ef' }}>{record.energy}점</span>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                        
+                        <div className="history-item-calories">
+                          <Flame size={12} color="#ec4899" />
+                          <span>{record.calories} kcal 소모</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       <footer style={{ textAlign: 'center', fontSize: '0.75rem', color: '#475569', marginTop: 'auto', paddingTop: '2rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
         <div>Pocket Motion Counter Demo v{__APP_VERSION__}</div>
