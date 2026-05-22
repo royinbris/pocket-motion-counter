@@ -54,6 +54,19 @@ header h1 {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   letter-spacing: -0.04em;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+  display: inline-block; /* 크기 변형 애니메이션이 안정적으로 작용하도록 인라인 블록 적용 */
+}
+
+header h1:hover {
+  opacity: 0.9;
+  transform: scale(1.02);
+}
+
+header h1:active {
+  transform: scale(0.97);
 }
 
 header p {

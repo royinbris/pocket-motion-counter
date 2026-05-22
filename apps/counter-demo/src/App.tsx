@@ -351,7 +351,7 @@ export default function App() {
   return (
     <div className="app-container">
       <header>
-        <h1>POCKET MOTION</h1>
+        <h1 onClick={() => window.location.reload()} title="새로고침">POCKET MOTION</h1>
         <div style={{ fontSize: '0.85rem', color: '#8b5cf6', marginTop: '0.4rem', letterSpacing: '0.05em', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem' }}>
           <span>🚀</span>
           <span>v{__APP_VERSION__}</span>
