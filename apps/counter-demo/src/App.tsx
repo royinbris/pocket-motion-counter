@@ -360,62 +360,64 @@ export default function App() {
     };
   }, []);
 
-  // 다중 세트 및 시간 기반 루틴 타이머 구동
+  // 1초마다 남은 시간 차감 타이머
   useEffect(() => {
-    let timerId: number | null = null;
-    if (isActive) {
-      timerId = window.setInterval(() => {
-        if (isResting) {
-          // 세트 간 휴식 중 카운트다운
-          setTimeRemaining((prev) => {
-            if (prev <= 1) {
-              if (timerId) clearInterval(timerId);
-              
-              setIsResting(false);
-              const nextSet = currentSet + 1;
-              setCurrentSet(nextSet);
-              setCount(0);
-              
-              playStartChime();
-              
-              if (workoutType !== 'dance') {
-                if (workoutMode === 'time') {
-                  setTimeRemaining(workDuration);
-                }
-                counterRef.current?.reset();
-                counterRef.current?.start();
-              }
-              resetBlackSaverTimer();
-              return 0;
-            }
-            // 3초 전 알림음
-            if (prev <= 4) {
-              playCountdownTick();
-            }
-            return prev - 1;
-          });
-        } else {
-          // 운동 중 (시간 기반 모드일 때만 카운트다운 작동)
-          if (workoutMode === 'time' && workoutType !== 'dance') {
-            setTimeRemaining((prev) => {
-              if (prev <= 1) {
-                if (timerId) clearInterval(timerId);
-                setTimeout(() => {
-                  handleSetCompleted();
-                }, 100);
-                return 0;
-              }
-              return prev - 1;
-            });
-          }
+    if (!isActive) return;
+
+    // 시간 타이머가 작동해야 하는 상황:
+    // 1) 휴식 상태인 경우 (isResting)
+    // 2) 휴식이 아니면서 시간 기반 모드인 경우 (workoutMode === 'time' && workoutType !== 'dance')
+    const shouldRunTimer = isResting || (workoutMode === 'time' && workoutType !== 'dance');
+    if (!shouldRunTimer) return;
+
+    const timer = window.setInterval(() => {
+      setTimeRemaining((prev) => {
+        if (prev <= 1) {
+          return 0;
         }
-      }, 1000);
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [isActive, isResting, workoutMode, workoutType]);
+
+  // 남은 시간 변화(timeRemaining)에 따른 상태 전이 및 알림음 재생 부수 효과
+  useEffect(() => {
+    if (!isActive) return;
+
+    // 휴식 중이고 3초 이하로 남았을 때 카운트다운 비프음 재생
+    if (isResting && timeRemaining > 0 && timeRemaining <= 3) {
+      playCountdownTick();
     }
 
-    return () => {
-      if (timerId) clearInterval(timerId);
-    };
-  }, [isActive, isResting, currentSet, totalSets, workoutMode, workDuration, restDuration, workoutType]);
+    // 시간이 0이 되었을 때 상태 전이 처리
+    if (timeRemaining === 0) {
+      if (isResting) {
+        // 휴식 만료 -> 다음 세트 개시
+        setIsResting(false);
+        const nextSet = currentSet + 1;
+        setCurrentSet(nextSet);
+        setCount(0);
+        
+        playStartChime();
+        
+        if (workoutType !== 'dance') {
+          if (workoutMode === 'time') {
+            setTimeRemaining(workDuration);
+          }
+          counterRef.current?.reset();
+          counterRef.current?.start();
+        }
+        resetBlackSaverTimer();
+      } else {
+        // 운동 중 시간 만료 -> 세트 완료 처리
+        if (workoutMode === 'time' && workoutType !== 'dance') {
+          handleSetCompleted();
+        }
+      }
+    }
+  }, [timeRemaining, isActive, isResting, currentSet, workoutMode, workDuration, workoutType]);
 
   // 세트 완료 처리 공통 함수
   const handleSetCompleted = () => {
