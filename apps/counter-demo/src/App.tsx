@@ -13,6 +13,7 @@ export default function App() {
   const [count, setCount] = useState(0);
   const [currentState, setCurrentState] = useState<CounterState>('idle');
   const [targetCount, setTargetCount] = useState<number | "">(10);
+  const [sensitivity, setSensitivity] = useState<number>(5);
   const [isCompleted, setIsCompleted] = useState(false);
   const [bump, setBump] = useState(false);
 
@@ -195,8 +196,11 @@ export default function App() {
 
   // Initialize Motion Engine
   useEffect(() => {
+    const thresholdVal = Number((2.2 - sensitivity * 0.2).toFixed(2));
     const squatCounter = new SquatCounter({
       targetCount: targetCount === "" ? 10 : targetCount,
+      thresholdDown: thresholdVal,
+      thresholdUp: thresholdVal,
       minRepDurationMs: 1200 // 스쿼트 1회 최소 소요 시간 1.2초 보장
     });
 
@@ -229,7 +233,7 @@ export default function App() {
     return () => {
       squatCounter.stop();
     };
-  }, [targetCount]);
+  }, [targetCount, sensitivity]);
 
   // Motion event router
   useEffect(() => {
@@ -389,6 +393,35 @@ export default function App() {
                   <span style={{ fontSize: '2rem', fontWeight: '800', color: '#64748b' }}>회</span>
                 </div>
               </div>
+
+              {/* Sensitivity Control Slider */}
+              <div className="input-group" style={{ textAlign: 'center', marginBottom: '2rem', width: '100%' }}>
+                <label style={{ fontSize: '0.95rem', color: '#94a3b8', marginBottom: '0.5rem', display: 'block', fontWeight: '700' }}>
+                  센서 민감도 설정: <span style={{ color: '#8b5cf6' }}>{sensitivity}</span> {sensitivity === 5 ? '(보통)' : sensitivity > 5 ? '(민감)' : '(둔감)'}
+                </label>
+                <input
+                  type="range"
+                  min="1"
+                  max="10"
+                  value={sensitivity}
+                  onChange={(e) => setSensitivity(parseInt(e.target.value, 10))}
+                  style={{
+                    width: '100%',
+                    accentColor: '#8b5cf6',
+                    height: '6px',
+                    borderRadius: '3px',
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    outline: 'none',
+                    marginTop: '0.5rem',
+                    cursor: 'pointer'
+                  }}
+                />
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#64748b', marginTop: '0.4rem' }}>
+                  <span>둔감함 (큰 움직임)</span>
+                  <span>민감함 (작은 움직임)</span>
+                </div>
+              </div>
+
               <button className="btn-main start" onClick={handleStartWorkout}>
                 <Play size={20} />
                 운동 시작하기
