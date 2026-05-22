@@ -315,7 +315,10 @@ export default function App() {
     <div className="app-container">
       <header>
         <h1>POCKET MOTION</h1>
-        <p>주머니 속 센서 기반 스쿼트 카운터</p>
+        <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.25rem', letterSpacing: '0.05em', fontWeight: '500' }}>
+          v1.0.2 ({__APP_VERSION__})
+        </div>
+        <p style={{ marginTop: '0.5rem' }}>주머니 속 센서 기반 스쿼트 카운터</p>
       </header>
 
       {/* Permission Block */}
