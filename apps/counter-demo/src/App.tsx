@@ -16,8 +16,8 @@ export default function App() {
   const [targetCount, setTargetCount] = useState<number | "">(10);
   const [sensitivity, setSensitivity] = useState<number>(5);
   const [isCompleted, setIsCompleted] = useState(false);
-  const [bump, setBump] = useState(false);
-  const [ballOffset, setBallOffset] = useState({ x: 0, y: 0 });
+  // ballOffset은 초당 60회 이상 변경되므로 성능(UI 먹통 현상)을 위해 React state 대신 직접 DOM(ref)을 제어
+  const ballRef = useRef<HTMLDivElement>(null);
   const [isReloading, setIsReloading] = useState(false);
   const [workoutType, setWorkoutType] = useState<'squat' | 'pushup' | 'walk' | 'dance'>('squat');
   const [isSoundOn, setIsSoundOn] = useState(true);
@@ -967,7 +967,9 @@ export default function App() {
   // Motion event router
   useEffect(() => {
     if (!permissionGranted || !isActive || isResting) {
-      setBallOffset({ x: 0, y: 0 });
+      if (ballRef.current) {
+        ballRef.current.style.transform = `translate3d(0px, 0px, 0)`;
+      }
       return;
     }
 
@@ -1013,7 +1015,9 @@ export default function App() {
         targetY = rawY * (maxRadius / distance);
       }
 
-      setBallOffset({ x: targetX, y: targetY });
+      if (ballRef.current) {
+        ballRef.current.style.transform = `translate3d(${targetX}px, ${targetY}px, 0)`;
+      }
 
       const sample: MotionSample = {
         timestamp: Date.now(),
@@ -1043,7 +1047,9 @@ export default function App() {
     window.addEventListener('devicemotion', handleMotionEvent);
     return () => {
       window.removeEventListener('devicemotion', handleMotionEvent);
-      setBallOffset({ x: 0, y: 0 });
+      if (ballRef.current) {
+        ballRef.current.style.transform = `translate3d(0px, 0px, 0)`;
+      }
     };
   }, [permissionGranted, isActive, workoutType, isResting]);
 
@@ -1095,7 +1101,7 @@ export default function App() {
     }
 
     setIsActive(false);
-    setBallOffset({ x: 0, y: 0 });
+    if (ballRef.current) ballRef.current.style.transform = `translate3d(0px, 0px, 0)`;
     await releaseWakeLock(); // 화면 꺼짐 방지 해제
   };
 
@@ -1148,7 +1154,7 @@ export default function App() {
     setCurrentSet(1);
     setIsResting(false);
     setTimeRemaining(0);
-    setBallOffset({ x: 0, y: 0 });
+    if (ballRef.current) ballRef.current.style.transform = `translate3d(0px, 0px, 0)`;
     setShowBlackSaver(false);
     totalAccumulatedCountRef.current = 0;
     workoutActiveDurationMsRef.current = 0;
@@ -1667,7 +1673,7 @@ export default function App() {
                   {/* 기존 스쿼트/푸시업/걷기 민감도 설정은 유지 */}
                   <div style={{ gridColumn: 'span 2', marginTop: '0.8rem', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '0.8rem' }}>
                     <label style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: '700', display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                      <span>🏃 운동 감지 민감도</span>
+                      <span>🏃 운동 민감도</span>
                       <span style={{ color: '#c084fc' }}>{sensitivity} / 10</span>
                     </label>
                     <input
@@ -1692,7 +1698,7 @@ export default function App() {
                   {/* 댄스 모드 설정 (민감도) */}
                   <div style={{ marginTop: '0.8rem', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '0.8rem', textAlign: 'left' }}>
                     <label style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: '700', display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                      <span>🎵 댄스 감지 민감도</span>
+                      <span>🎵 댄스 민감도</span>
                       <span style={{ color: '#c084fc' }}>{danceSensitivity} / 10</span>
                     </label>
                     <input
@@ -1830,8 +1836,9 @@ export default function App() {
                   <div className="motion-container">
                     <div 
                       className="motion-ball" 
+                      ref={ballRef}
                       style={{ 
-                        transform: `translate3d(${ballOffset.x}px, ${ballOffset.y}px, 0)` 
+                        transform: `translate3d(0px, 0px, 0)` 
                       }} 
                     />
                   </div>
@@ -1991,7 +1998,7 @@ export default function App() {
                       {workoutType === 'dance' ? (
                         <>
                           <label style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: '700', display: 'flex', justifyContent: 'space-between', marginBottom: '0.15rem' }}>
-                            <span>🎵 댄스 감지 민감도</span>
+                            <span>🎵 댄스 민감도</span>
                             <span style={{ color: '#c084fc' }}>{danceSensitivity} / 10</span>
                           </label>
                           <input
@@ -2007,7 +2014,7 @@ export default function App() {
                       ) : (
                         <>
                           <label style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: '700', display: 'flex', justifyContent: 'space-between', marginBottom: '0.15rem' }}>
-                            <span>🏃 실시간 감지 민감도</span>
+                            <span>🏃 실시간 민감도</span>
                             <span style={{ color: '#c084fc' }}>{sensitivity} / 10</span>
                           </label>
                           <input
