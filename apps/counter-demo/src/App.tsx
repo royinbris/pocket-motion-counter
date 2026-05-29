@@ -1214,13 +1214,11 @@ export default function App() {
 
       {permissionGranted === true && (
         <>
-          {/* Workout Type Tabs Selector (4포지션 그리드 탭으로 개편) */}
-          <div style={{ 
+          {/* Workout Type Tabs Selector - 운동 중에는 숨김 처리 */}
+          {!isActive && !isCompleted && <div style={{ 
             width: '100%', 
             maxWidth: '480px', 
             margin: '0 auto 1.5rem auto',
-            opacity: isActive ? 0.6 : 1,
-            pointerEvents: isActive ? 'none' : 'auto',
             transition: 'all 0.3s ease'
           }}>
             <div style={{ 
@@ -1265,12 +1263,7 @@ export default function App() {
                 </button>
               ))}
             </div>
-            {isActive && (
-              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.4rem', textAlign: 'center' }}>
-                🔒 운동 진행 중에는 종목을 변경할 수 없습니다.
-              </div>
-            )}
-          </div>
+          </div>}
 
           {/* Settings before workout */}
           {!isActive && !isCompleted && (
@@ -1800,7 +1793,7 @@ export default function App() {
                     textAlign: 'left'
                   }}>
                     {/* 소리 토글 */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: workoutType !== 'dance' ? '1rem' : '0' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                       <span style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                         {isSoundOn ? <Volume2 size={16} color="#c084fc" /> : <VolumeX size={16} color="#64748b" />}
                         알림음 소리
@@ -1827,24 +1820,42 @@ export default function App() {
                       </button>
                     </div>
 
-                    {/* 실시간 민감도 (댄스 모드가 아닐 때만 노출) */}
-                    {workoutType !== 'dance' && (
-                      <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '0.75rem' }}>
-                        <label style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: '700', display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                          <span>🏃 실시간 감지 민감도</span>
-                          <span style={{ color: '#c084fc' }}>{sensitivity} / 10</span>
-                        </label>
-                        <input
-                          type="range"
-                          min="1"
-                          max="10"
-                          value={sensitivity}
-                          onChange={(e) => setSensitivity(parseInt(e.target.value, 10))}
-                          className="sensitivity-slider"
-                          style={{ margin: '0.5rem 0' }}
-                        />
-                      </div>
-                    )}
+                    {/* 실시간 민감도: 댄스 모드는 댄스 민감도, 나머지는 일반 민감도 */}
+                    <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '0.75rem' }}>
+                      {workoutType === 'dance' ? (
+                        <>
+                          <label style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: '700', display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                            <span>🎵 댄스 감지 민감도</span>
+                            <span style={{ color: '#c084fc' }}>{danceSensitivity} / 10</span>
+                          </label>
+                          <input
+                            type="range"
+                            min="1"
+                            max="10"
+                            value={danceSensitivity}
+                            onChange={(e) => setDanceSensitivity(parseInt(e.target.value, 10))}
+                            className="sensitivity-slider"
+                            style={{ margin: '0.5rem 0' }}
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <label style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: '700', display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                            <span>🏃 실시간 감지 민감도</span>
+                            <span style={{ color: '#c084fc' }}>{sensitivity} / 10</span>
+                          </label>
+                          <input
+                            type="range"
+                            min="1"
+                            max="10"
+                            value={sensitivity}
+                            onChange={(e) => setSensitivity(parseInt(e.target.value, 10))}
+                            className="sensitivity-slider"
+                            style={{ margin: '0.5rem 0' }}
+                          />
+                        </>
+                      )}
+                    </div>
                   </div>
 
                   {/* Stop & Pause controls */}
