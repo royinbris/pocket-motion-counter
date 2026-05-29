@@ -161,6 +161,9 @@ export default function App() {
   const workoutModeRef = useRef<'rep' | 'time'>('rep');
   const restDurationRef = useRef(15);
   const isRestingRef = useRef(false);
+  const isActiveRef = useRef(false);
+  const targetCountRef = useRef<number | "">(10);
+  const sensitivityRef = useRef(5);
 
   useEffect(() => {
     currentSetRef.current = currentSet;
@@ -168,6 +171,9 @@ export default function App() {
     workoutModeRef.current = workoutMode;
     restDurationRef.current = restDuration;
     isRestingRef.current = isResting;
+    isActiveRef.current = isActive;
+    targetCountRef.current = targetCount;
+    sensitivityRef.current = sensitivity;
   });
 
   // 센서 권한이 허용된 이후에 안전하게 세션 복구 수행
@@ -845,7 +851,7 @@ export default function App() {
         tracker.onUpdate((metrics) => {
             setDanceMetrics(metrics);
             // 3분 무동작 일시정지 처리
-            if (!metrics.isActive && isActive) {
+            if (!metrics.isActive && isActiveRef.current) {
                 handleStopWorkout();
                 alert("3분 동안 움직임이 없어 운동이 일시정지되었습니다.");
             }
@@ -895,6 +901,7 @@ export default function App() {
             }
         });
         danceTrackerRef.current = tracker;
+        if (isActiveRef.current) tracker.start();
 
         return () => {
             tracker.stop();
@@ -909,7 +916,7 @@ export default function App() {
         const isWalk = workoutType === 'walk';
         const minThreshold = isWalk ? 1.2 : (isPushUp ? 0.6 : 1.2); // 스쿼트 최저 민감도 낮춤 (1.8 -> 1.2)
         const maxThreshold = isWalk ? 0.3 : (isPushUp ? 0.12 : 0.2); // 스쿼트 최고 민감도 대폭 낮춤 (0.6 -> 0.2)
-        const thresholdVal = Number((minThreshold - (sensitivity - 1) * ((minThreshold - maxThreshold) / 9)).toFixed(2));
+        const thresholdVal = Number((minThreshold - (sensitivityRef.current - 1) * ((minThreshold - maxThreshold) / 9)).toFixed(2));
         
         const squatCounter = new SquatCounter({
           targetCount: 9999,
@@ -934,7 +941,7 @@ export default function App() {
           }
 
           if (workoutModeRef.current === 'rep') {
-            const target = targetCount === "" ? 10 : targetCount;
+            const target = targetCountRef.current === "" ? 10 : targetCountRef.current;
             if (newCount >= target) {
               setTimeout(() => {
                 handleSetCompleted();
@@ -948,13 +955,14 @@ export default function App() {
         });
 
         counterRef.current = squatCounter;
+        if (isActiveRef.current) squatCounter.start();
 
         return () => {
           squatCounter.stop();
           counterRef.current = null;
         };
     }
-  }, [targetCount, sensitivity, workoutType, isActive]);
+  }, [workoutType]);
 
   // Motion event router
   useEffect(() => {
