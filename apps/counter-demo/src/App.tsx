@@ -18,45 +18,44 @@ interface SensitivitySliderProps {
 }
 
 function SensitivitySlider({ label, value, onChange, min = 1, max = 10, sliderStyle, labelStyle }: SensitivitySliderProps) {
-  const valueTextRef = useRef<HTMLSpanElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [internalValue, setInternalValue] = useState(value);
+  const isDragging = useRef(false);
 
-  // 부모로부터 받은 value 값이 변경되면 화면 텍스트 및 input value 동기화
+  // 부모로부터 받은 value 값이 변경되면 동기화 (단, 드래그 중이 아닐 때만)
   useEffect(() => {
-    if (inputRef.current && inputRef.current.value !== String(value)) {
-      inputRef.current.value = String(value);
-      if (valueTextRef.current) {
-        valueTextRef.current.textContent = `${value} / 10`;
-      }
+    if (!isDragging.current) {
+      setInternalValue(value);
     }
   }, [value]);
 
-  const handleInput = (e: React.FormEvent<HTMLInputElement>) => {
-    // 드래그 중에는 텍스트만 리렌더링 없이 즉각 업데이트 (DOM 직접 수정)
-    if (valueTextRef.current) {
-      valueTextRef.current.textContent = `${e.currentTarget.value} / 10`;
-    }
+  const handleDragStart = () => {
+    isDragging.current = true;
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    isDragging.current = true;
+    setInternalValue(parseInt(e.target.value, 10));
   };
 
   const handleCommit = () => {
-    if (inputRef.current) {
-      onChange(parseInt(inputRef.current.value, 10));
-    }
+    isDragging.current = false;
+    onChange(internalValue);
   };
 
   return (
     <>
       <label style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: '700', display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', ...labelStyle }}>
         <span>{label}</span>
-        <span ref={valueTextRef} style={{ color: '#c084fc' }}>{value} / 10</span>
+        <span style={{ color: '#c084fc' }}>{internalValue} / 10</span>
       </label>
       <input
-        ref={inputRef}
         type="range"
         min={min}
         max={max}
-        defaultValue={value}
-        onInput={handleInput}
+        value={internalValue}
+        onChange={handleChange}
+        onMouseDown={handleDragStart}
+        onTouchStart={handleDragStart}
         onMouseUp={handleCommit}
         onTouchEnd={handleCommit}
         onTouchCancel={handleCommit}
