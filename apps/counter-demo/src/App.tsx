@@ -1369,7 +1369,16 @@ export default function App() {
               ].map((tab) => (
                 <button
                   key={tab.id}
-                  onClick={() => setWorkoutType(tab.id as any)}
+                  onClick={() => {
+                    const newType = tab.id as any;
+                    setWorkoutType(newType);
+                    if (newType === 'walk') {
+                      setWorkoutMode('time');
+                      if (workDuration === "" || workDuration < 60) setWorkDuration(10 * 60);
+                    } else if (newType !== 'dance' && workoutMode === 'time' && workDuration > 300) {
+                      setWorkDuration(30);
+                    }
+                  }}
                   disabled={isActive}
                   style={{
                     padding: '0.85rem 0.5rem',
@@ -1400,6 +1409,7 @@ export default function App() {
               {workoutType !== 'dance' ? (
                 <>
                   {/* 운동 방식 선택 (세그먼트 컨트롤) */}
+                  {workoutType !== 'walk' && (
                   <div style={{
                     display: 'flex',
                     background: 'rgba(255, 255, 255, 0.03)',
@@ -1434,6 +1444,7 @@ export default function App() {
                       </button>
                     ))}
                   </div>
+                  )}
 
                   {/* 세트 수 / 휴식 시간 입력판 그리드 */}
                   <div style={{
@@ -1595,7 +1606,7 @@ export default function App() {
                     {workoutMode === 'time' && (
                       <div style={{ gridColumn: 'span 2', textAlign: 'center', marginTop: '0.5rem' }}>
                         <label style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: '700', display: 'block', marginBottom: '0.5rem' }}>
-                          세트당 운동 시간
+                          {workoutType === 'walk' ? '걷기 목표 시간' : '세트당 운동 시간'}
                         </label>
                         <div style={{ 
                           position: 'relative', 
@@ -1612,7 +1623,7 @@ export default function App() {
                             pattern="[0-9]*"
                             min="10"
                             max="86400"
-                            value={workDuration}
+                            value={workoutType === 'walk' ? (workDuration === "" ? "" : (workDuration as number) / 60) : workDuration}
                             onChange={(e) => {
                               const val = e.target.value;
                               if (val === "") {
@@ -1620,7 +1631,11 @@ export default function App() {
                               } else {
                                 const parsed = parseInt(val, 10);
                                 if (!isNaN(parsed)) {
-                                  setWorkDuration(Math.min(86400, Math.max(1, parsed)));
+                                  if (workoutType === 'walk') {
+                                    setWorkDuration(Math.min(1440 * 60, Math.max(1 * 60, parsed * 60)));
+                                  } else {
+                                    setWorkDuration(Math.min(86400, Math.max(1, parsed)));
+                                  }
                                 }
                               }
                             }}
@@ -1664,7 +1679,7 @@ export default function App() {
                                 <X size={14} />
                               </button>
                             )}
-                            <span style={{ fontSize: '1.5rem', fontWeight: '800', color: '#64748b', userSelect: 'none' }}>초</span>
+                            <span style={{ fontSize: '1.5rem', fontWeight: '800', color: '#64748b', userSelect: 'none' }}>{workoutType === 'walk' ? '분' : '초'}</span>
                           </div>
                         </div>
                       </div>
@@ -1863,7 +1878,7 @@ export default function App() {
                                 {count}
                               </div>
                               <div style={{ fontSize: '1.1rem', fontWeight: '700', color: '#94a3b8', marginBottom: '0.6rem' }}>
-                                남은 시간: <strong style={{ color: '#fff' }}>{timeRemaining}</strong>초 / 세트 시간: {workDuration}초
+                                남은 시간: <strong style={{ color: '#fff' }}>{timeRemaining}</strong>초 / {workoutType === 'walk' ? `목표: ${Math.floor((workDuration as number) / 60)}분` : `세트 시간: ${workDuration}초`}
                               </div>
                             </>
                           ) : (
@@ -1872,7 +1887,7 @@ export default function App() {
                                 {timeRemaining}s
                               </div>
                               <div style={{ fontSize: '1.1rem', fontWeight: '700', color: '#94a3b8', marginBottom: '0.6rem' }}>
-                                현재 수행 횟수: <strong style={{ color: '#fff' }}>{count}</strong> 회 / 세트 시간: {workDuration}초
+                                현재 수행 횟수: <strong style={{ color: '#fff' }}>{count}</strong> 회 / {workoutType === 'walk' ? `목표: ${Math.floor((workDuration as number) / 60)}분` : `세트 시간: ${workDuration}초`}
                               </div>
                             </>
                           )}
@@ -2078,7 +2093,7 @@ export default function App() {
                   workoutType === 'pushup' ? '💪 푸시업' : '🚶 걷기'
                 } <strong>{totalSets}세트</strong>를 모두 마쳤습니다.<br />
                 <span style={{ fontSize: '0.95rem', color: '#64748b' }}>
-                  ({workoutMode === 'rep' ? `세트당 목표: ${targetCount || 10}회` : `세트당 시간: ${workDuration}초`})
+                  ({workoutMode === 'rep' ? `세트당 목표: ${targetCount || 10}회` : (workoutType === 'walk' ? `목표 시간: ${Math.floor((workDuration as number) / 60)}분` : `세트당 시간: ${workDuration}초`)})
                 </span>
               </p>
               <div style={{ width: '100%', maxWidth: '280px' }}>
