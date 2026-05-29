@@ -16,6 +16,7 @@ export default function App() {
   const [targetCount, setTargetCount] = useState<number | "">(10);
   const [sensitivity, setSensitivity] = useState<number>(5);
   const [isCompleted, setIsCompleted] = useState(false);
+  const [bump, setBump] = useState(false);
   // ballOffset은 초당 60회 이상 변경되므로 성능(UI 먹통 현상)을 위해 React state 대신 직접 DOM(ref)을 제어
   const ballRef = useRef<HTMLDivElement>(null);
   const [isReloading, setIsReloading] = useState(false);
@@ -1374,8 +1375,8 @@ export default function App() {
                     setWorkoutType(newType);
                     if (newType === 'walk') {
                       setWorkoutMode('time');
-                      if (workDuration === "" || workDuration < 60) setWorkDuration(10 * 60);
-                    } else if (newType !== 'dance' && workoutMode === 'time' && workDuration > 300) {
+                      if (workDuration === "" || Number(workDuration) < 60) setWorkDuration(10 * 60);
+                    } else if (newType !== 'dance' && workoutMode === 'time' && Number(workDuration) > 300) {
                       setWorkDuration(30);
                     }
                   }}
@@ -1878,7 +1879,7 @@ export default function App() {
                                 {count}
                               </div>
                               <div style={{ fontSize: '1.1rem', fontWeight: '700', color: '#94a3b8', marginBottom: '0.6rem' }}>
-                                남은 시간: <strong style={{ color: '#fff' }}>{timeRemaining}</strong>초 / {workoutType === 'walk' ? `목표: ${Math.floor((workDuration as number) / 60)}분` : `세트 시간: ${workDuration}초`}
+                                남은 시간: <strong style={{ color: '#fff' }}>{timeRemaining}</strong>초 / 목표: {Math.floor((workDuration as number) / 60)}분
                               </div>
                             </>
                           ) : (
@@ -1887,7 +1888,7 @@ export default function App() {
                                 {timeRemaining}s
                               </div>
                               <div style={{ fontSize: '1.1rem', fontWeight: '700', color: '#94a3b8', marginBottom: '0.6rem' }}>
-                                현재 수행 횟수: <strong style={{ color: '#fff' }}>{count}</strong> 회 / {workoutType === 'walk' ? `목표: ${Math.floor((workDuration as number) / 60)}분` : `세트 시간: ${workDuration}초`}
+                                현재 수행 횟수: <strong style={{ color: '#fff' }}>{count}</strong> 회 / 세트 시간: {workDuration}초
                               </div>
                             </>
                           )}
