@@ -1826,23 +1826,6 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* 디버그용 실시간 센서 출력창 (일시적 추가) */}
-                  <div style={{
-                    background: 'rgba(0,0,0,0.5)',
-                    color: '#0f0',
-                    fontFamily: 'monospace',
-                    fontSize: '1.8rem', // 기존 0.65rem에서 약 3배 확대
-                    padding: '0.8rem',
-                    borderRadius: '12px',
-                    margin: '0.5rem 0',
-                    textAlign: 'left',
-                    lineHeight: '1.5'
-                  }}>
-                    <strong style={{ color: '#fff' }}>[센서 확인]</strong><br/>
-                    상태: <span style={{ color: '#fbbf24' }}>{currentState}</span><br/>
-                    카운트: <span style={{ color: '#38bdf8' }}>{count}</span>
-                  </div>
-
                   {/* Inertia Motion Visualizer (관성 구슬 원형 UI) */}
                   <div className="motion-container">
                     <div 
