@@ -693,10 +693,14 @@ export default function App() {
     return () => clearBlackSaverTimer();
   }, [isActive, isResting]);
 
-  // 전역 터치/마우스 이벤트 감지로 타이머 리셋
+  // 전역 터치/마우스 이벤트 감지로 타이머 리셋 및 오디오 컨텍스트 강제 해제
   useEffect(() => {
     const handleUserActivity = () => {
       resetBlackSaverTimer();
+      // 모바일 웹 오디오 자동 재생 차단 해제 보완 로직
+      if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+        audioContextRef.current.resume().catch(console.error);
+      }
     };
     window.addEventListener('touchstart', handleUserActivity, { passive: true });
     window.addEventListener('mousedown', handleUserActivity, { passive: true });
@@ -958,8 +962,7 @@ export default function App() {
 
   // Motion event router
   useEffect(() => {
-    const isDance = workoutType === 'dance';
-    if (!permissionGranted || !isActive || isResting || (!isDance && !counterRef.current) || (isDance && !danceTrackerRef.current)) {
+    if (!permissionGranted || !isActive || isResting) {
       setBallOffset({ x: 0, y: 0 });
       return;
     }
@@ -993,10 +996,10 @@ export default function App() {
       const linearX = linear.x || 0;
       const linearY = linear.y || 0;
       
-      const rawX = -linearX * 45;
-      const rawY = linearY * 45;
+      const rawX = -linearX * 25;
+      const rawY = linearY * 25;
       const distance = Math.sqrt(rawX * rawX + rawY * rawY);
-      const maxRadius = 48; // 원의 내측 한계 기하 반경 (반지름 60px - 구슬 반지름 12px)
+      const maxRadius = 28; // 원의 내측 한계 기하 반경 (반지름 36px - 구슬 반지름 8px)
 
       let targetX = rawX;
       let targetY = rawY;
@@ -1021,10 +1024,15 @@ export default function App() {
         rotationGamma: gyro.gamma,
       };
 
+      const isDance = workoutType === 'dance';
       if (isDance) {
-        danceTrackerRef.current?.feed(sample);
+        if (danceTrackerRef.current) {
+          danceTrackerRef.current.feed(sample);
+        }
       } else {
-        counterRef.current?.feed(sample);
+        if (counterRef.current) {
+          counterRef.current.feed(sample);
+        }
       }
     };
 
@@ -1653,8 +1661,8 @@ export default function App() {
                     )}
 
                   {/* 기존 스쿼트/푸시업/걷기 민감도 설정은 유지 */}
-                  <div style={{ gridColumn: 'span 2', marginTop: '1rem', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '1rem' }}>
-                    <label style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: '700', display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                  <div style={{ gridColumn: 'span 2', marginTop: '0.8rem', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '0.8rem' }}>
+                    <label style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: '700', display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
                       <span>🏃 운동 감지 민감도</span>
                       <span style={{ color: '#c084fc' }}>{sensitivity} / 10</span>
                     </label>
@@ -1664,21 +1672,22 @@ export default function App() {
                       max="10"
                       value={sensitivity}
                       onChange={(e) => setSensitivity(parseInt(e.target.value, 10))}
-                      style={{ width: '100%', accentColor: '#8b5cf6' }}
+                      className="sensitivity-slider"
+                      style={{ margin: '0.25rem 0' }}
                     />
                   </div>
 
                   </div>
                 </>
               ) : (
-                <div className="input-group" style={{ textAlign: 'center', margin: '0.5rem 0' }}>
-                  <p style={{ color: '#94a3b8', fontSize: '0.9rem', lineHeight: '1.6' }}>
+                <div className="input-group" style={{ textAlign: 'center', margin: '0.25rem 0' }}>
+                  <p style={{ color: '#94a3b8', fontSize: '0.9rem', lineHeight: '1.6', margin: '0 0 1rem 0' }}>
                     🎵 댄스 모드는 주머니에 스마트폰을 넣고 자유롭게 리듬을 타며 춤을 추는 모드입니다.<br />
                     세트나 횟수 제한 없이 소모 칼로리와 춤 시간을 측정합니다.
                   </p>
                   {/* 댄스 모드 설정 (민감도) */}
-                  <div style={{ marginTop: '1.5rem', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '1rem', textAlign: 'left' }}>
-                    <label style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: '700', display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                  <div style={{ marginTop: '0.8rem', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '0.8rem', textAlign: 'left' }}>
+                    <label style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: '700', display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
                       <span>🎵 댄스 감지 민감도</span>
                       <span style={{ color: '#c084fc' }}>{danceSensitivity} / 10</span>
                     </label>
@@ -1688,14 +1697,15 @@ export default function App() {
                       max="10"
                       value={danceSensitivity}
                       onChange={(e) => setDanceSensitivity(parseInt(e.target.value, 10))}
-                      style={{ width: '100%', accentColor: '#8b5cf6' }}
+                      className="sensitivity-slider"
+                      style={{ margin: '0.25rem 0' }}
                     />
                   </div>
                 </div>
               )}
 
               {/* 운동 시작하기 버튼 */}
-              <div style={{ marginTop: '2rem', width: '100%' }}>
+              <div style={{ marginTop: '1.2rem', width: '100%' }}>
                 <button className="btn-main start" onClick={handleStartWorkout}>
                   <Play size={18} />
                   운동 시작하기
@@ -1706,7 +1716,7 @@ export default function App() {
 
           {/* Active Workout Board */}
           {(isActive || isCompleted) && (
-            <div className={`dashboard-card ${isActive ? 'active' : ''}`} style={{ marginBottom: '1.5rem' }}>
+            <div className={`dashboard-card ${isActive ? 'active' : ''}`} style={{ marginBottom: '0.6rem' }}>
               {isResting ? (
                 /* 휴식 중 화면 */
                 <div style={{ 
@@ -1747,15 +1757,15 @@ export default function App() {
                   {/* 세트 진행 현황 표시 */}
                   {workoutType !== 'dance' && (
                     <div style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      width: '100%',
-                      marginBottom: '1rem',
-                      background: 'rgba(255,255,255,0.02)',
-                      border: '1px solid rgba(255,255,255,0.05)',
-                      padding: '0.5rem 0.75rem',
-                      borderRadius: '10px'
+                       display: 'flex',
+                       justifyContent: 'space-between',
+                       alignItems: 'center',
+                       width: '100%',
+                       marginBottom: '0.6rem',
+                       background: 'rgba(255,255,255,0.02)',
+                       border: '1px solid rgba(255,255,255,0.05)',
+                       padding: '0.5rem 0.75rem',
+                       borderRadius: '10px'
                     }}>
                       <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: '700' }}>
                         🏋️ 진행 세트: <strong style={{ color: '#fff' }}>{currentSet} / {totalSets}</strong> 세트
@@ -1774,8 +1784,8 @@ export default function App() {
                   )}
 
                   {/* Pocket alignment guide */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: '#64748b', marginBottom: '1rem', width: '100%' }}>
-                    <Smartphone size={14} style={{ flexShrink: 0 }} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.7rem', color: '#64748b', marginBottom: '0.5rem', width: '100%' }}>
+                    <Smartphone size={13} style={{ flexShrink: 0 }} />
                     <span>
                       {workoutType === 'squat' && '우측 앞바지 주머니에 스마트폰을 고정하세요.'}
                       {workoutType === 'pushup' && '바지 주머니에 스마트폰을 고정하고 엉덩이를 낮췄다 올리세요.'}
@@ -1809,7 +1819,7 @@ export default function App() {
                           <div className={`counter-display ${bump ? 'bump' : ''}`}>
                             {count}
                           </div>
-                          <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#94a3b8', marginBottom: '2rem' }}>
+                          <div style={{ fontSize: '1.1rem', fontWeight: '700', color: '#94a3b8', marginBottom: '0.6rem' }}>
                             {workoutType === 'walk' ? '목표 걸음 수' : '목표 횟수'}: <strong style={{ color: '#fff' }}>{targetCount || 10}</strong> {workoutType === 'walk' ? '걸음' : '회'}
                           </div>
                         </>
@@ -1820,7 +1830,7 @@ export default function App() {
                               <div className={`counter-display ${bump ? 'bump' : ''}`} style={{ color: '#38bdf8' }}>
                                 {count}
                               </div>
-                              <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#94a3b8', marginBottom: '2rem' }}>
+                              <div style={{ fontSize: '1.1rem', fontWeight: '700', color: '#94a3b8', marginBottom: '0.6rem' }}>
                                 남은 시간: <strong style={{ color: '#fff' }}>{timeRemaining}</strong>초 / 세트 시간: {workDuration}초
                               </div>
                             </>
@@ -1829,7 +1839,7 @@ export default function App() {
                               <div className="counter-display" style={{ color: '#38bdf8', fontFamily: 'monospace' }}>
                                 {timeRemaining}s
                               </div>
-                              <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#94a3b8', marginBottom: '2rem' }}>
+                              <div style={{ fontSize: '1.1rem', fontWeight: '700', color: '#94a3b8', marginBottom: '0.6rem' }}>
                                 현재 수행 횟수: <strong style={{ color: '#fff' }}>{count}</strong> 회 / 세트 시간: {workDuration}초
                               </div>
                             </>
@@ -1838,10 +1848,10 @@ export default function App() {
                       )}
                     </>
                   ) : (
-                    <div style={{ width: '100%', marginBottom: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <div style={{ width: '100%', marginBottom: '0.6rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                       {/* Live Gauge */}
-                      <div className="dance-intensity-wrapper">
-                        <div className="dance-intensity-label">
+                      <div className="dance-intensity-wrapper" style={{ marginTop: '0.4rem' }}>
+                        <div className="dance-intensity-label" style={{ marginBottom: '0.2rem' }}>
                           <span>실시간 춤 강도</span>
                           <span style={{ color: '#d946ef' }}>{danceMetrics.intensity}%</span>
                         </div>
@@ -1854,25 +1864,25 @@ export default function App() {
                       </div>
                       
                       {/* Dance Metrics Grid */}
-                      <div className="dance-metrics-grid">
-                        <div className="dance-metric-card">
-                          <div className="dance-metric-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.2rem' }}>
-                            <Clock size={12} color="#8b5cf6" />
-                            <span>춤춘 시간</span>
+                      <div className="dance-metrics-grid" style={{ marginTop: '0.6rem', gap: '0.5rem' }}>
+                        <div className="dance-metric-card" style={{ padding: '0.4rem 0.3rem' }}>
+                          <div className="dance-metric-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.1rem' }}>
+                            <Clock size={11} color="#8b5cf6" />
+                            <span>시간</span>
                           </div>
-                          <div className="dance-metric-value">
+                          <div className="dance-metric-value" style={{ fontSize: '1rem' }}>
                             {formatDuration(danceMetrics.activeDurationMs)}
                           </div>
                         </div>
-                        <div className="dance-metric-card">
-                          <div className="dance-metric-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.2rem' }}>
-                            <Music size={12} color="#a78bfa" />
-                            <span>감지된 동작</span>
+                        <div className="dance-metric-card" style={{ padding: '0.4rem 0.3rem' }}>
+                          <div className="dance-metric-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.1rem' }}>
+                            <Music size={11} color="#a78bfa" />
+                            <span>동작</span>
                           </div>
                           <div className="dance-metric-value" style={{ 
                             color: lastAction !== '대기 중 🎵' ? '#e879f9' : '#64748b', 
                             fontWeight: '800', 
-                            fontSize: '1.05rem',
+                            fontSize: '0.9rem',
                             whiteSpace: 'nowrap',
                             textShadow: lastAction !== '대기 중 🎵' ? '0 0 10px rgba(232, 121, 249, 0.4)' : 'none',
                             transition: 'all 0.15s ease'
@@ -1880,12 +1890,12 @@ export default function App() {
                             {lastAction}
                           </div>
                         </div>
-                        <div className="dance-metric-card">
-                          <div className="dance-metric-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.2rem' }}>
-                            <Flame size={12} color="#ec4899" />
-                            <span>소모 칼로리</span>
+                        <div className="dance-metric-card" style={{ padding: '0.4rem 0.3rem' }}>
+                          <div className="dance-metric-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.1rem' }}>
+                            <Flame size={11} color="#ec4899" />
+                            <span>칼로리</span>
                           </div>
-                          <div className="dance-metric-value" style={{ color: '#ec4899' }}>
+                          <div className="dance-metric-value" style={{ color: '#ec4899', fontSize: '1rem' }}>
                             {danceMetrics.estimatedCalories} <span style={{ fontSize: '0.65rem', color: '#64748b' }}>kcal</span>
                           </div>
                         </div>
@@ -1893,49 +1903,69 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* 실시간 설정 컨트롤 (소리 및 민감도) */}
+                  {/* 실시간 설정 컨트롤 (소리, 절전, 민감도) */}
                   <div style={{ 
                     width: '100%', 
-                    background: 'rgba(255, 255, 255, 0.02)', 
-                    border: '1px solid rgba(255, 255, 255, 0.05)', 
-                    borderRadius: '16px', 
-                    padding: '1rem', 
-                    marginBottom: '1.5rem',
+                    background: 'rgba(255, 255, 255, 0.01)', 
+                    border: '1px solid rgba(255, 255, 255, 0.04)', 
+                    borderRadius: '12px', 
+                    padding: '0.6rem 0.8rem', 
+                    marginBottom: '0.6rem',
                     textAlign: 'left'
                   }}>
-                    {/* 소리 토글 */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                      <span style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                        {isSoundOn ? <Volume2 size={16} color="#c084fc" /> : <VolumeX size={16} color="#64748b" />}
-                        알림음 소리
-                      </span>
+                    {/* 소리 토글 & 절전 버튼 가로 2행 정렬 */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', marginBottom: '0.4rem' }}>
                       <button
                         type="button"
                         onClick={() => setIsSoundOn(!isSoundOn)}
                         style={{
-                          background: isSoundOn ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-                          border: isSoundOn ? '1px solid rgba(139, 92, 246, 0.4)' : '1px solid rgba(255, 255, 255, 0.1)',
-                          borderRadius: '10px',
-                          padding: '0.4rem 0.8rem',
+                          background: isSoundOn ? 'rgba(139, 92, 246, 0.15)' : 'rgba(255, 255, 255, 0.03)',
+                          border: isSoundOn ? '1px solid rgba(139, 92, 246, 0.3)' : '1px solid rgba(255, 255, 255, 0.05)',
+                          borderRadius: '8px',
+                          padding: '0.4rem 0.5rem',
                           color: isSoundOn ? '#c084fc' : '#64748b',
-                          fontSize: '0.8rem',
+                          fontSize: '0.75rem',
                           fontWeight: '700',
                           cursor: 'pointer',
                           transition: 'all 0.2s',
                           display: 'flex',
                           alignItems: 'center',
+                          justifyContent: 'center',
                           gap: '0.25rem'
                         }}
                       >
-                        {isSoundOn ? '소리 켬' : '음소거'}
+                        {isSoundOn ? <Volume2 size={13} color="#c084fc" /> : <VolumeX size={13} color="#64748b" />}
+                        {isSoundOn ? '알림음 켬' : '음소거'}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowBlackSaver(true)}
+                        style={{
+                          background: 'rgba(255, 255, 255, 0.03)',
+                          border: '1px solid rgba(255, 255, 255, 0.05)',
+                          borderRadius: '8px',
+                          padding: '0.4rem 0.5rem',
+                          color: '#e2e8f0',
+                          fontSize: '0.75rem',
+                          fontWeight: '700',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '0.25rem'
+                        }}
+                      >
+                        🔋 절전 화면
                       </button>
                     </div>
 
-                    {/* 실시간 민감도: 댄스 모드는 댄스 민감도, 나머지는 일반 민감도 */}
-                    <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '0.75rem' }}>
+                    {/* 실시간 민감도 */}
+                    <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.04)', paddingTop: '0.4rem' }}>
                       {workoutType === 'dance' ? (
                         <>
-                          <label style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: '700', display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                          <label style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: '700', display: 'flex', justifyContent: 'space-between', marginBottom: '0.15rem' }}>
                             <span>🎵 댄스 감지 민감도</span>
                             <span style={{ color: '#c084fc' }}>{danceSensitivity} / 10</span>
                           </label>
@@ -1946,12 +1976,12 @@ export default function App() {
                             value={danceSensitivity}
                             onChange={(e) => setDanceSensitivity(parseInt(e.target.value, 10))}
                             className="sensitivity-slider"
-                            style={{ margin: '0.5rem 0' }}
+                            style={{ margin: '0.15rem 0', height: '6px' }}
                           />
                         </>
                       ) : (
                         <>
-                          <label style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: '700', display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                          <label style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: '700', display: 'flex', justifyContent: 'space-between', marginBottom: '0.15rem' }}>
                             <span>🏃 실시간 감지 민감도</span>
                             <span style={{ color: '#c084fc' }}>{sensitivity} / 10</span>
                           </label>
@@ -1962,59 +1992,32 @@ export default function App() {
                             value={sensitivity}
                             onChange={(e) => setSensitivity(parseInt(e.target.value, 10))}
                             className="sensitivity-slider"
-                            style={{ margin: '0.5rem 0' }}
+                            style={{ margin: '0.15rem 0', height: '6px' }}
                           />
                         </>
                       )}
                     </div>
-
-                    {/* 배터리 절전 수동 켜기 */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '0.75rem' }}>
-                      <span style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                        🔋 배터리 절전 화면
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setShowBlackSaver(true)}
-                        style={{
-                          background: 'rgba(255, 255, 255, 0.05)',
-                          border: '1px solid rgba(255, 255, 255, 0.1)',
-                          borderRadius: '10px',
-                          padding: '0.4rem 0.8rem',
-                          color: '#fff',
-                          fontSize: '0.8rem',
-                          fontWeight: '700',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.25rem'
-                        }}
-                      >
-                        지금 켜기
-                      </button>
-                    </div>
                   </div>
 
                   {/* Stop & Pause controls */}
-                  <div style={{ width: '100%', display: 'flex', gap: '1rem' }}>
+                  <div style={{ width: '100%', display: 'flex', gap: '0.6rem' }}>
                     {isActive ? (
                       <button className="btn-main stop" onClick={handleStopWorkout}>
-                        <Square size={18} />
+                        <Square size={16} />
                         일시 중지
                       </button>
                     ) : (
                       <button className="btn-main start" onClick={handleStartWorkout}>
-                        <Play size={18} />
+                        <Play size={16} />
                         이어서 진행
                       </button>
                     )}
                     <button
                       onClick={handleReset}
                       style={{
-                        width: '60px',
-                        height: '58px',
-                        borderRadius: '16px',
+                        width: '50px',
+                        height: '48px',
+                        borderRadius: '14px',
                         background: 'rgba(255, 255, 255, 0.05)',
                         border: '1px solid var(--border-color)',
                         display: 'flex',

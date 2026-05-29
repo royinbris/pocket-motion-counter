@@ -33,7 +33,7 @@ body {
 .app-container {
   max-width: 480px;
   margin: 0 auto;
-  padding: 2rem 1.25rem;
+  padding: 1rem 1.25rem;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -42,12 +42,12 @@ body {
 
 header {
   text-align: center;
-  margin-bottom: 2.5rem;
+  margin-bottom: 1.2rem;
 }
 
 header h1 {
   font-family: 'Outfit', sans-serif;
-  font-size: 2.4rem;
+  font-size: 2.2rem;
   font-weight: 900;
   margin: 0;
   background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
@@ -71,8 +71,8 @@ header h1:active {
 
 header p {
   color: #64748b;
-  font-size: 0.95rem;
-  margin: 0.25rem 0 0 0;
+  font-size: 0.9rem;
+  margin: 0.2rem 0 0 0;
 }
 
 /* Premium Dashboard Card */
@@ -80,8 +80,8 @@ header p {
   background: var(--bg-card);
   backdrop-filter: blur(20px);
   border: 1px solid var(--border-color);
-  border-radius: 24px;
-  padding: 2rem;
+  border-radius: 20px;
+  padding: 1.25rem;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
   display: flex;
   flex-direction: column;
@@ -100,10 +100,10 @@ header p {
 /* Large Count display */
 .counter-display {
   font-family: 'Outfit', sans-serif;
-  font-size: 3.85rem;
+  font-size: 2.6rem;
   font-weight: 900;
   line-height: 1;
-  margin: 1.5rem 0;
+  margin: 0.5rem 0;
   background: linear-gradient(135deg, #ffffff 30%, #a5b4fc 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -169,10 +169,10 @@ header p {
 /* Control Panel */
 .btn-main {
   width: 100%;
-  height: 58px;
-  border-radius: 16px;
+  height: 48px;
+  border-radius: 14px;
   font-family: 'Outfit', sans-serif;
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   font-weight: 700;
   cursor: pointer;
   display: flex;
@@ -223,7 +223,7 @@ header p {
 /* Settings Form elements */
 .input-group {
   width: 100%;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
 }
 
 .input-group label {
@@ -319,13 +319,13 @@ header p {
 
 /* Inertia Motion Visualizer (구슬 움직임 시각화) */
 .motion-container {
-  width: 120px;
-  height: 120px;
+  width: 72px;
+  height: 72px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.02);
   border: 2px solid rgba(139, 92, 246, 0.25);
-  box-shadow: 0 0 15px rgba(139, 92, 246, 0.1), inset 0 0 15px rgba(255, 255, 255, 0.05);
-  margin: 1.5rem auto 0.5rem auto;
+  box-shadow: 0 0 10px rgba(139, 92, 246, 0.1), inset 0 0 10px rgba(255, 255, 255, 0.05);
+  margin: 0.5rem auto;
   position: relative;
   display: flex;
   align-items: center;
@@ -335,11 +335,11 @@ header p {
 }
 
 .motion-ball {
-  width: 24px;
-  height: 24px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background: linear-gradient(135deg, #a78bfa, #8b5cf6);
-  box-shadow: 0 0 12px #8b5cf6, inset 0 2px 4px rgba(255, 255, 255, 0.35);
+  box-shadow: 0 0 8px #8b5cf6, inset 0 2px 4px rgba(255, 255, 255, 0.35);
   position: absolute;
   will-change: transform;
   transition: transform 0.03s cubic-bezier(0.1, 0.8, 0.3, 1);
