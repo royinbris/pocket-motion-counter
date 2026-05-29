@@ -8,8 +8,7 @@
     "packages/*"
   ],
   "scripts": {
-    "dev:lab": "npm run dev --workspace=apps/sensor-lab",
-    "dev:demo": "npm run dev --workspace=apps/counter-demo",
+    "dev": "npm run dev --workspace=apps/counter-demo",
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present"
