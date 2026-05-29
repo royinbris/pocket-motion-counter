@@ -9,6 +9,7 @@ declare const __BUILD_TIME__: string;
 
 export default function App() {
   const [permissionGranted, setPermissionGranted] = useState<boolean | null>(null);
+  const [hasSavedSession, setHasSavedSession] = useState(false);
   const [isActive, setIsActive] = useState(false);
   const [count, setCount] = useState(0);
   const [currentState, setCurrentState] = useState<CounterState>('idle');
@@ -110,6 +111,9 @@ export default function App() {
       return updated;
     });
 
+    // 기록 저장이 완료되었으므로 임시 세션 삭제
+    localStorage.removeItem('pocket-motion-active-session');
+
     // 기록 저장이 완료되었으므로 누적 액티브 시간 초기화
     workoutActiveDurationMsRef.current = 0;
     if (isActive && !isResting) {
@@ -165,6 +169,99 @@ export default function App() {
     restDurationRef.current = restDuration;
     isRestingRef.current = isResting;
   });
+
+  // 센서 권한이 허용된 이후에 안전하게 세션 복구 수행
+  useEffect(() => {
+    if (permissionGranted === true && hasSavedSession) {
+      const savedSession = localStorage.getItem('pocket-motion-active-session');
+      if (savedSession) {
+        try {
+          const session = JSON.parse(savedSession);
+          const recover = window.confirm("진행 중이던 운동 기록이 있습니다. 이어서 진행하시겠습니까?");
+          if (recover) {
+            setWorkoutType(session.workoutType);
+            setWorkoutMode(session.workoutMode);
+            setCurrentSet(session.currentSet);
+            setCount(session.count);
+            totalAccumulatedCountRef.current = session.totalAccumulatedCount;
+            workoutActiveDurationMsRef.current = session.workoutActiveDurationMs;
+            setIsResting(session.isResting);
+            setTimeRemaining(session.timeRemaining);
+            setTargetCount(session.targetCount);
+            setTotalSets(session.totalSets);
+            setWorkDuration(session.workDuration);
+            setRestDuration(session.restDuration);
+            if (session.danceMetrics) {
+              setDanceMetrics(session.danceMetrics);
+            }
+            
+            // 즉시 운동 활성화
+            setIsActive(true);
+          } else {
+            localStorage.removeItem('pocket-motion-active-session');
+          }
+        } catch (e) {
+          console.error('진행 중 세션 복구 실패:', e);
+          localStorage.removeItem('pocket-motion-active-session');
+        }
+      }
+      setHasSavedSession(false); // 팝업 1회만 실행하도록 초기화
+    }
+  }, [permissionGranted, hasSavedSession]);
+
+  // 운동 진행 중 새로고침/탭 닫기 방지 경고
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isActive && !isCompleted) {
+        e.preventDefault();
+        e.returnValue = '운동이 진행 중입니다. 페이지를 벗어나면 진행 중인 기록이 유실될 수 있습니다.';
+        return e.returnValue;
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [isActive, isCompleted]);
+
+  // 진행 중인 운동 상태를 로컬스토리지에 임시 저장 (새로고침 대응)
+  useEffect(() => {
+    if (isActive && !isCompleted) {
+      const sessionData = {
+        workoutType,
+        workoutMode,
+        currentSet,
+        count,
+        totalAccumulatedCount: totalAccumulatedCountRef.current,
+        workoutActiveDurationMs: workoutActiveDurationMsRef.current,
+        isResting,
+        timeRemaining,
+        targetCount,
+        totalSets,
+        workDuration,
+        restDuration,
+        danceMetrics
+      };
+      localStorage.setItem('pocket-motion-active-session', JSON.stringify(sessionData));
+    } else if (isCompleted) {
+      // 완료 시 임시 세션 삭제
+      localStorage.removeItem('pocket-motion-active-session');
+    }
+  }, [
+    isActive,
+    isCompleted,
+    workoutType,
+    workoutMode,
+    currentSet,
+    count,
+    isResting,
+    timeRemaining,
+    targetCount,
+    totalSets,
+    workDuration,
+    restDuration,
+    danceMetrics
+  ]);
 
   // Audio Context 싱글톤으로 유지하기 위한 Ref
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -561,7 +658,7 @@ export default function App() {
     if (isActive && !isResting) {
       blackSaverTimerRef.current = window.setTimeout(() => {
         setShowBlackSaver(true);
-      }, 10000); // 10초간 무터치 상태 지속 시 가동
+      }, 60000); // 60초간 무터치 상태 지속 시 가동 (기존 10초에서 연장)
     }
   };
 
@@ -1044,6 +1141,7 @@ export default function App() {
     totalAccumulatedCountRef.current = 0;
     workoutActiveDurationMsRef.current = 0;
     currentSegmentStartTimeRef.current = null;
+    localStorage.removeItem('pocket-motion-active-session');
     await releaseWakeLock(); // 화면 꺼짐 방지 해제
   };
 
@@ -1868,6 +1966,33 @@ export default function App() {
                           />
                         </>
                       )}
+                    </div>
+
+                    {/* 배터리 절전 수동 켜기 */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '0.75rem' }}>
+                      <span style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        🔋 배터리 절전 화면
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowBlackSaver(true)}
+                        style={{
+                          background: 'rgba(255, 255, 255, 0.05)',
+                          border: '1px solid rgba(255, 255, 255, 0.1)',
+                          borderRadius: '10px',
+                          padding: '0.4rem 0.8rem',
+                          color: '#fff',
+                          fontSize: '0.8rem',
+                          fontWeight: '700',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.25rem'
+                        }}
+                      >
+                        지금 켜기
+                      </button>
                     </div>
                   </div>
 
