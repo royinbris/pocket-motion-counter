@@ -46,6 +46,7 @@ function SensitivitySlider({ label, value, onChange, min = 1, max = 10, sliderSt
         onChange={handleChange}
         onMouseUp={handleCommit}
         onTouchEnd={handleCommit}
+        onTouchCancel={handleCommit}
         className="sensitivity-slider"
         style={{ margin: '0.25rem 0', ...sliderStyle }}
       />

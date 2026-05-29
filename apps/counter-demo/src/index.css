@@ -601,6 +601,7 @@ header p {
   -webkit-appearance: none;
   cursor: pointer;
   margin: 1rem 0;
+  touch-action: none; /* 모바일 브라우저의 스크롤/제스처 간섭을 차단하여 먹통 현상 방지 */
 }
 
 /* Webkit (Safari, Chrome, etc.) */
