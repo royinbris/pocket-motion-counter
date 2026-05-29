@@ -653,13 +653,9 @@ export default function App() {
   const resetBlackSaverTimer = () => {
     if (blackSaverTimerRef.current) {
       window.clearTimeout(blackSaverTimerRef.current);
+      blackSaverTimerRef.current = null;
     }
-    // 휴식 중에는 블랙 세이버를 비활성화합니다.
-    if (isActive && !isResting) {
-      blackSaverTimerRef.current = window.setTimeout(() => {
-        setShowBlackSaver(true);
-      }, 60000); // 60초간 무터치 상태 지속 시 가동 (기존 10초에서 연장)
-    }
+    // 사용자의 요청에 따라 자동 실행 기능 비활성화 (수동으로만 작동)
   };
 
   const clearBlackSaverTimer = () => {
@@ -911,16 +907,16 @@ export default function App() {
         // 기존 스쿼트/푸시업/걷기 로직
         const isPushUp = workoutType === 'pushup';
         const isWalk = workoutType === 'walk';
-        const minThreshold = isWalk ? 1.2 : (isPushUp ? 0.6 : 1.8);
-        const maxThreshold = isWalk ? 0.3 : (isPushUp ? 0.12 : 0.6);
+        const minThreshold = isWalk ? 1.2 : (isPushUp ? 0.6 : 1.2); // 스쿼트 최저 민감도 낮춤 (1.8 -> 1.2)
+        const maxThreshold = isWalk ? 0.3 : (isPushUp ? 0.12 : 0.2); // 스쿼트 최고 민감도 대폭 낮춤 (0.6 -> 0.2)
         const thresholdVal = Number((minThreshold - (sensitivity - 1) * ((minThreshold - maxThreshold) / 9)).toFixed(2));
         
         const squatCounter = new SquatCounter({
           targetCount: 9999,
           thresholdDown: thresholdVal,
           thresholdUp: thresholdVal,
-          minRepDurationMs: isWalk ? 300 : (isPushUp ? 800 : 1200),
-          lpfAlpha: isWalk ? 0.25 : (isPushUp ? 0.25 : 0.15)
+          minRepDurationMs: isWalk ? 300 : (isPushUp ? 800 : 400), // 더 관대하게 400ms로 단축
+          lpfAlpha: isWalk ? 0.25 : (isPushUp ? 0.25 : 0.35) // 필터 반응성을 높임 (0.15 -> 0.35)
         });
 
         squatCounter.onCount((newCount) => {
@@ -1717,6 +1713,27 @@ export default function App() {
           {/* Active Workout Board */}
           {(isActive || isCompleted) && (
             <div className={`dashboard-card ${isActive ? 'active' : ''}`} style={{ marginBottom: '0.6rem' }}>
+              {/* 현재 운동 종목 표시 (상단 고정) */}
+              <div style={{
+                textAlign: 'center',
+                marginBottom: '1rem',
+                paddingBottom: '0.6rem',
+                borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+                fontSize: '1.2rem',
+                fontWeight: '800',
+                color: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.5rem'
+              }}>
+                {workoutType === 'squat' && '🦵 스쿼트'}
+                {workoutType === 'pushup' && '💪 푸시업'}
+                {workoutType === 'walk' && '🚶 걷기'}
+                {workoutType === 'dance' && '🎵 자유 댄스'}
+                <span style={{ fontSize: '0.85rem', color: '#c084fc', fontWeight: '600', marginLeft: '0.2rem' }}>진행 중</span>
+              </div>
+
               {isResting ? (
                 /* 휴식 중 화면 */
                 <div style={{ 
@@ -1800,6 +1817,24 @@ export default function App() {
                       {getStatusText(currentState)}
                     </div>
                   )}
+
+                  {/* 디버그용 실시간 센서 출력창 (일시적 추가) */}
+                  <div style={{
+                    background: 'rgba(0,0,0,0.5)',
+                    color: '#0f0',
+                    fontFamily: 'monospace',
+                    fontSize: '0.65rem',
+                    padding: '0.4rem',
+                    borderRadius: '8px',
+                    margin: '0.5rem 0',
+                    textAlign: 'left',
+                    lineHeight: '1.4'
+                  }}>
+                    DEBUG INFO:<br/>
+                    State: {currentState}<br/>
+                    Ball (X,Y): {Math.round(ballOffset.x)}, {Math.round(ballOffset.y)}<br/>
+                    Count: {count}
+                  </div>
 
                   {/* Inertia Motion Visualizer (관성 구슬 원형 UI) */}
                   <div className="motion-container">
