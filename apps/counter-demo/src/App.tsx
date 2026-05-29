@@ -18,35 +18,50 @@ interface SensitivitySliderProps {
 }
 
 function SensitivitySlider({ label, value, onChange, min = 1, max = 10, sliderStyle, labelStyle }: SensitivitySliderProps) {
-  const [localValue, setLocalValue] = useState(value);
+  const valueTextRef = useRef<HTMLSpanElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
+  // 부모로부터 받은 value 값이 변경되면 화면 텍스트 및 input value 동기화
   useEffect(() => {
-    setLocalValue(value);
+    if (inputRef.current && inputRef.current.value !== String(value)) {
+      inputRef.current.value = String(value);
+      if (valueTextRef.current) {
+        valueTextRef.current.textContent = `${value} / 10`;
+      }
+    }
   }, [value]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setLocalValue(parseInt(e.target.value, 10));
+  const handleInput = (e: React.FormEvent<HTMLInputElement>) => {
+    // 드래그 중에는 텍스트만 리렌더링 없이 즉각 업데이트 (DOM 직접 수정)
+    if (valueTextRef.current) {
+      valueTextRef.current.textContent = `${e.currentTarget.value} / 10`;
+    }
   };
 
   const handleCommit = () => {
-    onChange(localValue);
+    if (inputRef.current) {
+      onChange(parseInt(inputRef.current.value, 10));
+    }
   };
 
   return (
     <>
       <label style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: '700', display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', ...labelStyle }}>
         <span>{label}</span>
-        <span style={{ color: '#c084fc' }}>{localValue} / 10</span>
+        <span ref={valueTextRef} style={{ color: '#c084fc' }}>{value} / 10</span>
       </label>
       <input
+        ref={inputRef}
         type="range"
         min={min}
         max={max}
-        value={localValue}
-        onChange={handleChange}
+        defaultValue={value}
+        onInput={handleInput}
         onMouseUp={handleCommit}
         onTouchEnd={handleCommit}
         onTouchCancel={handleCommit}
+        onKeyUp={handleCommit}
+        onBlur={handleCommit}
         className="sensitivity-slider"
         style={{ margin: '0.25rem 0', ...sliderStyle }}
       />

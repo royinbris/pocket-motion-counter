@@ -25,6 +25,7 @@ export class DanceTracker {
   private lastMotionTime = Date.now(); // 마지막 움직임 시간 (3분 Idle 체크용)
 
   private lastSampleTime = 0;
+  private lastUpdateTime = 0; // UI 업데이트 스로틀링용 변수 추가
   private lpfAlpha = 0.2;
   private lastFilteredMag = 9.80665;
 
@@ -183,7 +184,10 @@ export class DanceTracker {
       this.verticalState = 'neutral';
     }
 
-    this.triggerUpdate(detectedAction);
+    if (detectedAction || now - this.lastUpdateTime > 100) {
+      this.triggerUpdate(detectedAction);
+      this.lastUpdateTime = now;
+    }
   }
 
   public onUpdate(cb: DanceUpdateCallback): void {
