@@ -21,6 +21,10 @@ export default function App() {
   const [workoutType, setWorkoutType] = useState<'squat' | 'pushup' | 'walk' | 'dance'>('squat');
   const [isSoundOn, setIsSoundOn] = useState(true);
 
+  // 마지막 감지 동작 표시 상태 (1.5초 유지)
+  const [lastAction, setLastAction] = useState<string>('대기 중 🎵');
+  const lastActionTimeoutRef = useRef<number | null>(null);
+
   // 운동 히스토리 기록 관련 상태 및 레프
   const [records, setRecords] = useState<WorkoutRecord[]>([]);
   const [showHistory, setShowHistory] = useState(false);
@@ -93,7 +97,7 @@ export default function App() {
       totalCount: recordTotalCount,
       durationMs: workoutType === 'dance' ? danceMetricsRef.current.activeDurationMs : sessionDurationMs,
       calories: calculatedCalories,
-      energy: workoutType === 'dance' ? danceMetricsRef.current.totalEnergy : 0
+      energy: workoutType === 'dance' ? danceMetricsRef.current.totalScore : 0
     };
 
     setRecords((prev) => {
@@ -129,7 +133,9 @@ export default function App() {
     activeDurationMs: 0,
     totalEnergy: 0,
     estimatedCalories: 0,
-    intensity: 0
+    totalScore: 0,
+    intensity: 0,
+    isActive: false
   });
 
   const danceMetricsRef = useRef(danceMetrics);
@@ -323,6 +329,142 @@ export default function App() {
     playNote(392.00, tempo * 5, 0.6); // G4
   };
 
+  // 댄스 모드 6가지 동작별 고유 사운드 재생 함수 (Web Audio API)
+  
+  // 1. 좌로 기울일 때: 부드러운 상승음 (C4 -> E4)
+  const playLeftTiltSound = () => {
+    if (!isSoundOn) return;
+    const ctx = getOrCreateAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    
+    osc.frequency.setValueAtTime(261.63, now); // C4
+    osc.frequency.exponentialRampToValueAtTime(329.63, now + 0.15); // E4
+    
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.15, now + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+    
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.2);
+  };
+
+  // 2. 우로 기울일 때: 부드러운 하강음 (C5 -> G4)
+  const playRightTiltSound = () => {
+    if (!isSoundOn) return;
+    const ctx = getOrCreateAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    
+    osc.frequency.setValueAtTime(523.25, now); // C5
+    osc.frequency.exponentialRampToValueAtTime(392.00, now + 0.15); // G4
+    
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.15, now + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+    
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.2);
+  };
+
+  // 3. 뛸 때: 짧고 강력한 고음 스타카토 비트음 (C6, 1046.50Hz)
+  const playRunSound = () => {
+    if (!isSoundOn) return;
+    const ctx = getOrCreateAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(1046.50, now); // C6
+    
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.2, now + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+    
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.08);
+  };
+
+  // 4. 걸을 때: 낮고 따뜻한 둥~ 소리 (A3, 220.00Hz)
+  const playWalkSound = () => {
+    if (!isSoundOn) return;
+    const ctx = getOrCreateAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(220.00, now); // A3
+    
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.18, now + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+    
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.15);
+  };
+
+  // 5. 상 운동할 때: 높은 피치의 쑝~ 상승 스윕음 (E5 -> E6)
+  const playUpMotionSound = () => {
+    if (!isSoundOn) return;
+    const ctx = getOrCreateAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    
+    osc.frequency.setValueAtTime(659.25, now); // E5
+    osc.frequency.exponentialRampToValueAtTime(1318.51, now + 0.25); // E6
+    
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.15, now + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+    
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.3);
+  };
+
+  // 6. 하 운동할 때: 낮은 피치의 쓔웅~ 하강 스윕음 (E4 -> E3)
+  const playDownMotionSound = () => {
+    if (!isSoundOn) return;
+    const ctx = getOrCreateAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    
+    osc.frequency.setValueAtTime(329.63, now); // E4
+    osc.frequency.exponentialRampToValueAtTime(164.81, now + 0.25); // E3
+    
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.15, now + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+    
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.3);
+  };
+
   // Vibration feedback helper (Android support)
   const triggerVibration = (pattern: number | number[]) => {
     if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
@@ -361,12 +503,16 @@ export default function App() {
     }
   }, []);
 
-  // 임계값 매핑 (걷기는 1.2~0.3, 스쿼트는 1.8~0.6, 푸시업은 0.6~0.12)
-  const isPushUp = workoutType === 'pushup';
-  const isWalk = workoutType === 'walk';
-  const minThreshold = isWalk ? 1.2 : (isPushUp ? 0.6 : 1.8);
-  const maxThreshold = isWalk ? 0.3 : (isPushUp ? 0.12 : 0.6);
-  const thresholdVal = Number((minThreshold - (sensitivity - 1) * ((minThreshold - maxThreshold) / 9)).toFixed(2));
+  // 댄스 모드 민감도
+  const [danceSensitivity, setDanceSensitivity] = useState<number>(5);
+
+  useEffect(() => {
+    if (workoutType === 'dance' && danceTrackerRef.current) {
+        // 1~10을 0.1~1.0 정도로 매핑 (0.4가 기본값)
+        const threshold = 0.1 + (danceSensitivity - 1) * 0.1; 
+        danceTrackerRef.current.setMotionThreshold(threshold);
+    }
+  }, [danceSensitivity, workoutType]);
 
   // Wake Lock 제어 함수
   const requestWakeLock = async () => {
@@ -582,72 +728,123 @@ export default function App() {
     resetBlackSaverTimer();
   };
 
-  // Initialize Motion Engine
+  // 수정된 댄스 감지 관련 useEffect
   useEffect(() => {
     if (workoutType === 'dance') {
-      const tracker = new DanceTracker();
-      tracker.onUpdate((metrics) => {
-        setDanceMetrics(metrics);
-      });
-      danceTrackerRef.current = tracker;
+        const tracker = new DanceTracker();
+        tracker.onUpdate((metrics) => {
+            setDanceMetrics(metrics);
+            // 3분 무동작 일시정지 처리
+            if (!metrics.isActive && isActive) {
+                handleStopWorkout();
+                alert("3분 동안 움직임이 없어 운동이 일시정지되었습니다.");
+            }
 
-      return () => {
-        tracker.stop();
-        danceTrackerRef.current = null;
-      };
+            // 실시간 동작 감지 효과음 및 화면 텍스트 연동
+            if (metrics.detectedAction) {
+                let actionText = '';
+                switch (metrics.detectedAction) {
+                    case 'left_tilt':
+                        actionText = '좌로 기울임 ↩️';
+                        playLeftTiltSound();
+                        break;
+                    case 'right_tilt':
+                        actionText = '우로 기울임 ↪️';
+                        playRightTiltSound();
+                        break;
+                    case 'run':
+                        actionText = '뛰기 ⚡';
+                        playRunSound();
+                        break;
+                    case 'walk':
+                        actionText = '걷기 🚶';
+                        playWalkSound();
+                        break;
+                    case 'up_motion':
+                        actionText = '상 운동 🔼';
+                        playUpMotionSound();
+                        break;
+                    case 'down_motion':
+                        actionText = '하 운동 🔽';
+                        break;
+                }
+                if (metrics.detectedAction === 'down_motion') {
+                    // down_motion의 경우 block scope 밖에서 함수 호출할 수 있어 직접 호출 또는 안전하게 처리
+                    playDownMotionSound();
+                }
+
+                if (actionText) {
+                    setLastAction(actionText);
+                    if (lastActionTimeoutRef.current) {
+                        window.clearTimeout(lastActionTimeoutRef.current);
+                    }
+                    lastActionTimeoutRef.current = window.setTimeout(() => {
+                        setLastAction('대기 중 🎵');
+                    }, 1500);
+                }
+            }
+        });
+        danceTrackerRef.current = tracker;
+
+        return () => {
+            tracker.stop();
+            danceTrackerRef.current = null;
+            if (lastActionTimeoutRef.current) {
+                window.clearTimeout(lastActionTimeoutRef.current);
+            }
+        };
     } else {
-      const squatCounter = new SquatCounter({
-        // FSM 내부의 완료 판정이 직접 운동을 정지시키지 않도록 임시로 9999로 설정하고,
-        // 대신 리액트의 handleSetCompleted() 로직이 실제 종료를 책임지도록 우회합니다.
-        targetCount: 9999,
-        thresholdDown: thresholdVal,
-        thresholdUp: thresholdVal,
-        minRepDurationMs: isWalk ? 300 : (isPushUp ? 800 : 1200),
-        lpfAlpha: isWalk ? 0.25 : (isPushUp ? 0.25 : 0.15)
-      });
+        // 기존 스쿼트/푸시업/걷기 로직
+        const isPushUp = workoutType === 'pushup';
+        const isWalk = workoutType === 'walk';
+        const minThreshold = isWalk ? 1.2 : (isPushUp ? 0.6 : 1.8);
+        const maxThreshold = isWalk ? 0.3 : (isPushUp ? 0.12 : 0.6);
+        const thresholdVal = Number((minThreshold - (sensitivity - 1) * ((minThreshold - maxThreshold) / 9)).toFixed(2));
+        
+        const squatCounter = new SquatCounter({
+          targetCount: 9999,
+          thresholdDown: thresholdVal,
+          thresholdUp: thresholdVal,
+          minRepDurationMs: isWalk ? 300 : (isPushUp ? 800 : 1200),
+          lpfAlpha: isWalk ? 0.25 : (isPushUp ? 0.25 : 0.15)
+        });
 
-      squatCounter.onCount((newCount) => {
-        setCount(newCount);
-        setBump(true);
-        setTimeout(() => setBump(false), 200);
+        squatCounter.onCount((newCount) => {
+          setCount(newCount);
+          setBump(true);
+          setTimeout(() => setBump(false), 200);
 
-        playRepCompleteChime();
-        triggerVibration(180);
+          playRepCompleteChime();
+          triggerVibration(180);
 
-        // 걷기 모드 전용 10보 주기 알림
-        if (workoutType === 'walk' && newCount % 10 === 0 && newCount > 0) {
-          setTimeout(() => {
-            playStartChime();
-          }, 250);
-        }
-
-        // 횟수 기반 모드에서 세트 목표 도달 여부 체크
-        if (workoutModeRef.current === 'rep') {
-          const target = targetCount === "" ? 10 : targetCount;
-          if (newCount >= target) {
+          if (workoutType === 'walk' && newCount % 10 === 0 && newCount > 0) {
             setTimeout(() => {
-              handleSetCompleted();
-            }, 100);
+              playStartChime();
+            }, 250);
           }
-        }
-      });
 
-      squatCounter.onStateChange((state) => {
-        setCurrentState(state);
-      });
+          if (workoutModeRef.current === 'rep') {
+            const target = targetCount === "" ? 10 : targetCount;
+            if (newCount >= target) {
+              setTimeout(() => {
+                handleSetCompleted();
+              }, 100);
+            }
+          }
+        });
 
-      squatCounter.onComplete(() => {
-        // 내부 complete 이벤트는 무시하고 handleSetCompleted()로 이원화합니다.
-      });
+        squatCounter.onStateChange((state) => {
+          setCurrentState(state);
+        });
 
-      counterRef.current = squatCounter;
+        counterRef.current = squatCounter;
 
-      return () => {
-        squatCounter.stop();
-        counterRef.current = null;
-      };
+        return () => {
+          squatCounter.stop();
+          counterRef.current = null;
+        };
     }
-  }, [targetCount, sensitivity, workoutType, thresholdVal, isPushUp, isWalk]);
+  }, [targetCount, sensitivity, workoutType, isActive]);
 
   // Motion event router
   useEffect(() => {
@@ -762,6 +959,10 @@ export default function App() {
   const handleStopWorkout = async () => {
     if (workoutType === 'dance') {
       danceTrackerRef.current?.stop();
+      setLastAction('대기 중 🎵');
+      if (lastActionTimeoutRef.current) {
+        window.clearTimeout(lastActionTimeoutRef.current);
+      }
     } else {
       counterRef.current?.stop();
     }
@@ -807,8 +1008,14 @@ export default function App() {
         activeDurationMs: 0,
         totalEnergy: 0,
         estimatedCalories: 0,
-        intensity: 0
+        totalScore: 0,
+        intensity: 0,
+        isActive: false
       });
+      setLastAction('대기 중 🎵');
+      if (lastActionTimeoutRef.current) {
+        window.clearTimeout(lastActionTimeoutRef.current);
+      }
     } else {
       counterRef.current?.reset();
     }
@@ -1341,24 +1548,22 @@ export default function App() {
                       </div>
                     )}
 
-                    {/* 민감도 설정 슬라이더 */}
-                    <div style={{ gridColumn: 'span 2', marginTop: '1rem', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '1rem' }}>
-                      <label style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: '700', display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                        <span>🏃 운동 감지 민감도</span>
-                        <span style={{ color: '#c084fc' }}>{sensitivity} / 10</span>
-                      </label>
-                      <input
-                        type="range"
-                        min="1"
-                        max="10"
-                        value={sensitivity}
-                        onChange={(e) => setSensitivity(parseInt(e.target.value, 10))}
-                        className="sensitivity-slider"
-                      />
-                      <span style={{ fontSize: '0.7rem', color: '#64748b', display: 'block', marginTop: '0.4rem', lineHeight: '1.4' }}>
-                        ※ 값이 높을수록 미세한 움직임도 감지합니다. 푸시업이나 작은 폭의 운동일 때 높여주세요.
-                      </span>
-                    </div>
+                  {/* 기존 스쿼트/푸시업/걷기 민감도 설정은 유지 */}
+                  <div style={{ gridColumn: 'span 2', marginTop: '1rem', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '1rem' }}>
+                    <label style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: '700', display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                      <span>🏃 운동 감지 민감도</span>
+                      <span style={{ color: '#c084fc' }}>{sensitivity} / 10</span>
+                    </label>
+                    <input
+                      type="range"
+                      min="1"
+                      max="10"
+                      value={sensitivity}
+                      onChange={(e) => setSensitivity(parseInt(e.target.value, 10))}
+                      style={{ width: '100%', accentColor: '#8b5cf6' }}
+                    />
+                  </div>
+
                   </div>
                 </>
               ) : (
@@ -1367,6 +1572,21 @@ export default function App() {
                     🎵 댄스 모드는 주머니에 스마트폰을 넣고 자유롭게 리듬을 타며 춤을 추는 모드입니다.<br />
                     세트나 횟수 제한 없이 소모 칼로리와 춤 시간을 측정합니다.
                   </p>
+                  {/* 댄스 모드 설정 (민감도) */}
+                  <div style={{ marginTop: '1.5rem', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '1rem', textAlign: 'left' }}>
+                    <label style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: '700', display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                      <span>🎵 댄스 감지 민감도</span>
+                      <span style={{ color: '#c084fc' }}>{danceSensitivity} / 10</span>
+                    </label>
+                    <input
+                      type="range"
+                      min="1"
+                      max="10"
+                      value={danceSensitivity}
+                      onChange={(e) => setDanceSensitivity(parseInt(e.target.value, 10))}
+                      style={{ width: '100%', accentColor: '#8b5cf6' }}
+                    />
+                  </div>
                 </div>
               )}
 
@@ -1543,10 +1763,17 @@ export default function App() {
                         <div className="dance-metric-card">
                           <div className="dance-metric-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.2rem' }}>
                             <Music size={12} color="#a78bfa" />
-                            <span>에너지 점수</span>
+                            <span>감지된 동작</span>
                           </div>
-                          <div className="dance-metric-value">
-                            {danceMetrics.totalEnergy}
+                          <div className="dance-metric-value" style={{ 
+                            color: lastAction !== '대기 중 🎵' ? '#e879f9' : '#64748b', 
+                            fontWeight: '800', 
+                            fontSize: '1.05rem',
+                            whiteSpace: 'nowrap',
+                            textShadow: lastAction !== '대기 중 🎵' ? '0 0 10px rgba(232, 121, 249, 0.4)' : 'none',
+                            transition: 'all 0.15s ease'
+                          }}>
+                            {lastAction}
                           </div>
                         </div>
                         <div className="dance-metric-card">
@@ -1800,8 +2027,8 @@ export default function App() {
                                   <span className="stat-val">{formatDuration(record.durationMs)}</span>
                                 </div>
                                 <div>
-                                  <span className="stat-label">에너지 점수</span>
-                                  <span className="stat-val" style={{ color: '#d946ef' }}>{record.energy}점</span>
+                                  <span className="stat-label">활동 구분</span>
+                                  <span className="stat-val" style={{ color: '#fb7185', fontWeight: 'bold' }}>자유 댄스 🎵</span>
                                 </div>
                               </>
                             )}
