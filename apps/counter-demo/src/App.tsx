@@ -1823,17 +1823,16 @@ export default function App() {
                     background: 'rgba(0,0,0,0.5)',
                     color: '#0f0',
                     fontFamily: 'monospace',
-                    fontSize: '0.65rem',
-                    padding: '0.4rem',
-                    borderRadius: '8px',
+                    fontSize: '1.8rem', // 기존 0.65rem에서 약 3배 확대
+                    padding: '0.8rem',
+                    borderRadius: '12px',
                     margin: '0.5rem 0',
                     textAlign: 'left',
-                    lineHeight: '1.4'
+                    lineHeight: '1.5'
                   }}>
-                    DEBUG INFO:<br/>
-                    State: {currentState}<br/>
-                    Ball (X,Y): {Math.round(ballOffset.x)}, {Math.round(ballOffset.y)}<br/>
-                    Count: {count}
+                    <strong style={{ color: '#fff' }}>[센서 확인]</strong><br/>
+                    상태: <span style={{ color: '#fbbf24' }}>{currentState}</span><br/>
+                    카운트: <span style={{ color: '#38bdf8' }}>{count}</span>
                   </div>
 
                   {/* Inertia Motion Visualizer (관성 구슬 원형 UI) */}
