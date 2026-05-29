@@ -7,6 +7,52 @@ import { MotionSample, CounterState, WorkoutRecord } from '@pocket-motion/types'
 declare const __APP_VERSION__: string;
 declare const __BUILD_TIME__: string;
 
+interface SensitivitySliderProps {
+  label: string;
+  value: number;
+  onChange: (val: number) => void;
+  min?: number;
+  max?: number;
+  sliderStyle?: React.CSSProperties;
+  labelStyle?: React.CSSProperties;
+}
+
+function SensitivitySlider({ label, value, onChange, min = 1, max = 10, sliderStyle, labelStyle }: SensitivitySliderProps) {
+  const [localValue, setLocalValue] = useState(value);
+
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setLocalValue(parseInt(e.target.value, 10));
+  };
+
+  const handleCommit = () => {
+    onChange(localValue);
+  };
+
+  return (
+    <>
+      <label style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: '700', display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', ...labelStyle }}>
+        <span>{label}</span>
+        <span style={{ color: '#c084fc' }}>{localValue} / 10</span>
+      </label>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        value={localValue}
+        onChange={handleChange}
+        onMouseUp={handleCommit}
+        onTouchEnd={handleCommit}
+        className="sensitivity-slider"
+        style={{ margin: '0.25rem 0', ...sliderStyle }}
+      />
+    </>
+  );
+}
+
 export default function App() {
   const [permissionGranted, setPermissionGranted] = useState<boolean | null>(null);
   const [hasSavedSession, setHasSavedSession] = useState(false);
@@ -1688,18 +1734,10 @@ export default function App() {
 
                   {/* 기존 스쿼트/푸시업/걷기 민감도 설정은 유지 */}
                   <div style={{ gridColumn: 'span 2', marginTop: '0.8rem', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '0.8rem' }}>
-                    <label style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: '700', display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                      <span>🏃 운동 민감도</span>
-                      <span style={{ color: '#c084fc' }}>{sensitivity} / 10</span>
-                    </label>
-                    <input
-                      type="range"
-                      min="1"
-                      max="10"
+                    <SensitivitySlider
+                      label="🏃 운동 민감도"
                       value={sensitivity}
-                      onChange={(e) => setSensitivity(parseInt(e.target.value, 10))}
-                      className="sensitivity-slider"
-                      style={{ margin: '0.25rem 0' }}
+                      onChange={setSensitivity}
                     />
                   </div>
 
@@ -1713,18 +1751,10 @@ export default function App() {
                   </p>
                   {/* 댄스 모드 설정 (민감도) */}
                   <div style={{ marginTop: '0.8rem', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '0.8rem', textAlign: 'left' }}>
-                    <label style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: '700', display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                      <span>🎵 댄스 민감도</span>
-                      <span style={{ color: '#c084fc' }}>{danceSensitivity} / 10</span>
-                    </label>
-                    <input
-                      type="range"
-                      min="1"
-                      max="10"
+                    <SensitivitySlider
+                      label="🎵 댄스 민감도"
                       value={danceSensitivity}
-                      onChange={(e) => setDanceSensitivity(parseInt(e.target.value, 10))}
-                      className="sensitivity-slider"
-                      style={{ margin: '0.25rem 0' }}
+                      onChange={setDanceSensitivity}
                     />
                   </div>
                 </div>
@@ -2012,37 +2042,21 @@ export default function App() {
                     {/* 실시간 민감도 */}
                     <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.04)', paddingTop: '0.4rem' }}>
                       {workoutType === 'dance' ? (
-                        <>
-                          <label style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: '700', display: 'flex', justifyContent: 'space-between', marginBottom: '0.15rem' }}>
-                            <span>🎵 댄스 민감도</span>
-                            <span style={{ color: '#c084fc' }}>{danceSensitivity} / 10</span>
-                          </label>
-                          <input
-                            type="range"
-                            min="1"
-                            max="10"
-                            value={danceSensitivity}
-                            onChange={(e) => setDanceSensitivity(parseInt(e.target.value, 10))}
-                            className="sensitivity-slider"
-                            style={{ margin: '0.15rem 0', height: '6px' }}
-                          />
-                        </>
+                        <SensitivitySlider
+                          label="🎵 댄스 민감도"
+                          value={danceSensitivity}
+                          onChange={setDanceSensitivity}
+                          sliderStyle={{ margin: '0.15rem 0', height: '6px' }}
+                          labelStyle={{ fontSize: '0.75rem', marginBottom: '0.15rem' }}
+                        />
                       ) : (
-                        <>
-                          <label style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: '700', display: 'flex', justifyContent: 'space-between', marginBottom: '0.15rem' }}>
-                            <span>🏃 실시간 민감도</span>
-                            <span style={{ color: '#c084fc' }}>{sensitivity} / 10</span>
-                          </label>
-                          <input
-                            type="range"
-                            min="1"
-                            max="10"
-                            value={sensitivity}
-                            onChange={(e) => setSensitivity(parseInt(e.target.value, 10))}
-                            className="sensitivity-slider"
-                            style={{ margin: '0.15rem 0', height: '6px' }}
-                          />
-                        </>
+                        <SensitivitySlider
+                          label="🏃 실시간 민감도"
+                          value={sensitivity}
+                          onChange={setSensitivity}
+                          sliderStyle={{ margin: '0.15rem 0', height: '6px' }}
+                          labelStyle={{ fontSize: '0.75rem', marginBottom: '0.15rem' }}
+                        />
                       )}
                     </div>
                   </div>
