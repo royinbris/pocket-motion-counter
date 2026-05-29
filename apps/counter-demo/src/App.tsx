@@ -1724,22 +1724,22 @@ export default function App() {
               {/* 현재 운동 종목 표시 (상단 고정) */}
               <div style={{
                 textAlign: 'center',
-                marginBottom: '1rem',
-                paddingBottom: '0.6rem',
-                borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-                fontSize: '1.2rem',
-                fontWeight: '800',
+                marginBottom: '1.2rem',
+                paddingBottom: '0.8rem',
+                borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+                fontSize: '2rem', // 훨씬 크게 변경
+                fontWeight: '900', // 더 굵게
                 color: '#fff',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '0.5rem'
+                textShadow: '0 2px 10px rgba(0,0,0,0.3)', // 글씨가 더 잘 보이도록 그림자 추가
+                letterSpacing: '-0.5px'
               }}>
                 {workoutType === 'squat' && '🦵 스쿼트'}
                 {workoutType === 'pushup' && '💪 푸시업'}
                 {workoutType === 'walk' && '🚶 걷기'}
                 {workoutType === 'dance' && '🎵 자유 댄스'}
-                <span style={{ fontSize: '0.85rem', color: '#c084fc', fontWeight: '600', marginLeft: '0.2rem' }}>진행 중</span>
               </div>
 
               {isResting ? (
