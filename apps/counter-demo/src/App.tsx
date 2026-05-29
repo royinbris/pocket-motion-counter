@@ -506,13 +506,26 @@ export default function App() {
   // 댄스 모드 민감도
   const [danceSensitivity, setDanceSensitivity] = useState<number>(5);
 
+  // 댄스 민감도 변경 시 DanceTracker에 즉시 반영
   useEffect(() => {
     if (workoutType === 'dance' && danceTrackerRef.current) {
-        // 1~10을 0.1~1.0 정도로 매핑 (0.4가 기본값)
-        const threshold = 0.1 + (danceSensitivity - 1) * 0.1; 
+        // 민감도 1~10: threshold 1.0 → 0.1 (높을수록 더 예민하게)
+        const threshold = 1.1 - danceSensitivity * 0.1;
         danceTrackerRef.current.setMotionThreshold(threshold);
     }
   }, [danceSensitivity, workoutType]);
+
+  // 일반 운동 민감도 변경 시 SquatCounter에 즉시 반영
+  useEffect(() => {
+    if (workoutType !== 'dance' && counterRef.current) {
+      const isPushUp = workoutType === 'pushup';
+      const isWalk = workoutType === 'walk';
+      const minThreshold = isWalk ? 1.2 : (isPushUp ? 0.6 : 1.8);
+      const maxThreshold = isWalk ? 0.3 : (isPushUp ? 0.12 : 0.6);
+      const thresholdVal = Number((minThreshold - (sensitivity - 1) * ((minThreshold - maxThreshold) / 9)).toFixed(2));
+      (counterRef.current as any).setConfig({ thresholdDown: thresholdVal, thresholdUp: thresholdVal });
+    }
+  }, [sensitivity, workoutType]);
 
   // Wake Lock 제어 함수
   const requestWakeLock = async () => {

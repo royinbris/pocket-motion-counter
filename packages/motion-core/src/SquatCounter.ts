@@ -48,6 +48,11 @@ export class SquatCounter implements IMotionCounter {
     this.isActive = false;
   }
 
+  /** 운동 중 민감도 등 설정을 런타임에 업데이트 (카운트 초기화 없음) */
+  public setConfig(partial: Partial<CounterConfig>): void {
+    this.config = { ...this.config, ...partial };
+  }
+
   public reset(): void {
     this.count = 0;
     this.state = 'idle';
